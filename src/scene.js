@@ -9,11 +9,13 @@
 //  never discarded, and re-saving writes the newest schema):
 //    1  study-01/0.1.0  original Study 01
 //    2  precision pass, checkpoint 1: schema field, transient groups split out
+//    3  checkpoint 2: looks carry separate light terms (old looks converted term for term)
 //  Later checkpoints append steps here.
 // ─────────────────────────────────────────────────────────────────────────────
 import { P, VERSION } from './params.js';
+import { isLegacy, fromLegacy } from './looks.js';
 
-export const SCHEMA = 2;
+export const SCHEMA = 3;
 
 // Groups of P written into a scene. Everything else in P is transient.
 export const SAVED_GROUPS = () => Object.keys(P).filter(k => !TRANSIENT.includes(k) && k !== 'looks');
@@ -22,6 +24,10 @@ export const TRANSIENT = ['diag', 'manual'];
 const STEPS = {
   // 1 → 2: nothing renamed yet; mark the schema and drop any transient state that slipped in.
   1: s => { for (const t of TRANSIENT) delete s[t]; s.schema = 2; return s; },
+  2: s => {
+    if (s.looks) for (const k of ['lookA', 'lookB']) if (isLegacy(s.looks[k])) s.looks[k] = fromLegacy(s.looks[k]);
+    s.schema = 3; return s;
+  },
 };
 
 export function migrate(input) {

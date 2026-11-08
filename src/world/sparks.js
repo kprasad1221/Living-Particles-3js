@@ -46,14 +46,14 @@ const vertexShader = /* glsl */`
   }
 `;
 const fragmentShader = /* glsl */`
-  uniform float uBright;
+  uniform float uBright, uCore;
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
     float d = length(gl_PointCoord - 0.5) * 2.0;
-    float a = smoothstep(1.0, 0.0, d);
-    float core = smoothstep(0.35, 0.0, d);
-    gl_FragColor = vec4((vColor * a + vec3(core) * 0.6) * uBright * vAlpha, 1.0);
+    float a = 1.0 - smoothstep(0.0, 1.0, d);          // descending ramps written with ordered edges
+    float core = 1.0 - smoothstep(0.0, 0.35, d);      // (smoothstep is undefined when edge0 >= edge1)
+    gl_FragColor = vec4((vColor * a + vec3(core) * uCore) * uBright * vAlpha, 1.0);
   }
 `;
 
@@ -71,7 +71,7 @@ export class Sparks {
     g.setAttribute('aStart', this.start); g.setAttribute('aVel', this.vel); g.setAttribute('aMeta', this.meta);
     this.uniforms = {
       uTime: { value: 0 }, uGravity: { value: -4 }, uTurb: { value: 1 }, uSize: { value: 0.3 }, uPixel: { value: 500 },
-      uBright: { value: 1 }, uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
+      uBright: { value: 1 }, uCore: { value: 0.6 }, uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader, fragmentShader,
@@ -99,7 +99,7 @@ export class Sparks {
   }
 
   // SPAWN: called once per simulation step.
-  step(field, time, dt) {
+  step(field, time, dt, aff) {
     const S = P.sparks;
     if (!S.on || !field.layout) return;
     const L = field.layout, r = this.rand;
@@ -110,7 +110,7 @@ export class Sparks {
       if (S.burst > 0) {
         for (let s = 0; s < SAMPLES; s++) {
           const i = list[(r() * list.length) | 0];
-          const a = field.activation(i, histAt);
+          const a = field.tileState(i, histAt, time, aff);
           if (a.onset > 0.55 && r() < S.burst) {
             const n = 1 + ((r() * 3) | 0);
             for (let j = 0; j < n; j++) this.emit(L.x[i], a.height, L.z[i], k, time);
@@ -123,7 +123,7 @@ export class Sparks {
         let guard = 0;
         while (this.steady[k] >= 1 && guard++ < 64) {
           const i = list[(r() * list.length) | 0];
-          const a = field.activation(i, histAt);
+          const a = field.tileState(i, histAt, time, aff);
           if (a.act > 0.3) { this.emit(L.x[i], a.height, L.z[i], k, time); this.steady[k] -= 1; }
           else if (guard > 16) break;
         }
@@ -154,7 +154,7 @@ export class Sparks {
   sync(look, time, pixel) {
     const u = this.uniforms, S = P.sparks;
     u.uTime.value = time; u.uGravity.value = S.gravity; u.uTurb.value = S.turbulence;
-    u.uSize.value = S.size; u.uPixel.value = pixel; u.uBright.value = S.bright;
+    u.uSize.value = S.size; u.uPixel.value = pixel; u.uBright.value = S.bright; u.uCore.value = look.sparkCore;
     for (let k = 0; k < NB; k++) u.uPalette.value[k].copy(look['v' + k]);
     this.points.visible = S.on && P.diag.view !== 'surface';
     this.flush();

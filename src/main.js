@@ -37,7 +37,7 @@ const state = { running: true, simTime: 0, voiceMorph: 0 };
 const app = {
   lookA: cloneLook(LOOKS[P.looks.a]), lookB: cloneLook(LOOKS[P.looks.b]),
   mixed: {},
-  userLooks: store.get('lp.looks', {}),
+  userLooks: Object.fromEntries(Object.entries(store.get('lp.looks', {})).map(([k, l]) => [k, sanitizeLook(l, LOOKS.av2)])),
   scenes: store.get('lp.scenes', {}),
   stats: { tiles: 0, sparks: 0, fps: 0, calls: 0, tris: 0 },
   ui: { saveName: 'my look' },
@@ -56,6 +56,12 @@ field.build(P.spawn);
 stage.scene.add(field.mesh);
 const sparks = new Sparks();
 stage.scene.add(sparks.points);
+// The emission pass (bloom source) draws the same tiles with only their emitted light.
+let diagBefore = 0;
+stage.emissionHook = on => {
+  const u = field.uniforms.uDiag;
+  if (on) { diagBefore = u.value; u.value = 1; } else u.value = diagBefore;
+};
 app.stats.tiles = field.layout.count;
 
 const sources = new Sources();
@@ -71,7 +77,7 @@ function simStep() {
   depositBands();
   sources.advance(SIM_DT);
   state.simTime += SIM_DT;
-  sparks.step(field, state.simTime, SIM_DT);
+  sparks.step(field, state.simTime, SIM_DT, stage.affector);
 }
 
 // ── Looks ───────────────────────────────────────────────────────────────────

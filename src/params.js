@@ -95,7 +95,7 @@ export const P = {
   },
 
   // OUTPUT — Look A and Look B are full copies of this shape; what you see is mix(A, B, morph).
-  looks: { a: 'av2', b: 'av3', morph: 0, drive: 'hand', edit: 'a' },   // drive: hand | lfo | v0…v7
+  looks: { a: 'av2p', b: 'av2', morph: 0, drive: 'hand', edit: 'a' },   // drive: hand | lfo | v0…v7
 
   camera: { drift: false, driftSpeed: 0.25, fov: 55 },
   render: { scale: 1, toneMapping: 'neutral' },
@@ -108,9 +108,4 @@ export const P = {
   manual: { on: false, voice: 1, level: 0.8 },
 };
 
-// The shape of a look (Output context). Numbers and colours only, so two looks can be mixed.
-export const LOOK_KEYS = {
-  colors: ['v0', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'rim', 'face', 'side', 'skyTop', 'horizon'],
-  numbers: ['rimWidth', 'rimGlow', 'rimPulse', 'fillGlow', 'fillCore', 'sideGlow', 'edgeLines', 'grain',
-    'flash', 'fog', 'horizonGlow', 'bloom', 'bloomRadius', 'bloomThreshold', 'exposure'],
-};
+// The shape of a look lives in looks.js (LOOK_KEYS).

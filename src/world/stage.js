@@ -1,26 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Stage: renderer, camera, sky, bloom, and the affector's position.
+//  Stage: renderer, camera, sky, bloom, and the pointer's position on the floor.
 //
-//  Post chain (TouchDesigner: Render TOP → Bloom/Glow TOPs → Out TOP; Unity: the
-//  post-processing volume with Bloom):
-//    RenderPass (half-float, 4× MSAA) → SavePass (keeps the scene before bloom)
-//      → UnrealBloomPass → Diagnostic pass → OutputPass (tone map + sRGB, once)
+//  Render path (all intermediate targets linear half-float; tone mapping and sRGB
+//  conversion happen once, in OutputPass):
 //
-//  Diagnostic views (Light → diagnostics, never saved):
-//    normal    the composite
-//    nobloom   bloom pass disabled
-//    bloom     bloom contribution only: composite − saved scene (bloom adds onto the scene)
-//    emission  only emitted light (rims, fills, flashes, sparks), no surfaces, sky or bloom
-//    surface   only lit surfaces and fog, no emission or bloom
+//    1 scene        the full scene                                   → mainRT (4× MSAA)
+//    2 emission     the same scene, emission terms only, sky hidden  → emRT   (same geometry,
+//                   so rims hidden behind a column stay hidden)
+//    3 bloom input  mix(emission, scene, look.bloomSky)               → inRT
+//                   bloomSky 0: only emitted light can glow (the sky and fog never bloom)
+//                   bloomSky 1: Study 01's behaviour, the whole scene above the cutoff glows
+//    4 bloom        UnrealBloomPass on inRT; its own composite target holds the glow alone
+//    5 combine      scene + glow                                      → finalRT
+//    6 output       tone map + sRGB                                    → screen
+//
+//  Diagnostic views (never saved): normal · nobloom · bloom (glow alone) · emission · surface.
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { SavePass } from 'three/addons/postprocessing/SavePass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { P } from '../params.js';
 
 const skyVertex = /* glsl */`
@@ -69,25 +69,22 @@ export class Stage {
     this.sky.frustumCulled = false; this.sky.renderOrder = -1;
     this.scene.add(this.sky);
 
-    const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
-    this.composer = new EffectComposer(renderer, target);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.save = new SavePass(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false }));
-    this.composer.addPass(this.save);
+    const rt = (samples = 0) => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples, depthBuffer: samples > 0 });
+    this.mainRT = rt(4); this.emRT = rt(4); this.inRT = rt(); this.finalRT = rt();
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 1, 0.4, 0.2);
-    this.composer.addPass(this.bloom);
-    this.diagPass = new ShaderPass({
-      uniforms: { tDiffuse: { value: null }, tScene: { value: this.save.renderTarget.texture }, uMode: { value: 0 } },
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform sampler2D tDiffuse, tScene; uniform float uMode; varying vec2 vUv;
-        void main() { vec4 c = texture2D(tDiffuse, vUv);
-          if (uMode > 0.5) c.rgb = max(c.rgb - texture2D(tScene, vUv).rgb, 0.0);
-          gl_FragColor = c; }`,
-    });
-    this.diagPass.uniforms.tScene.value = this.save.renderTarget.texture;   // ShaderPass clones uniforms: re-link
-    this.composer.addPass(this.diagPass);
-    this.composer.addPass(new OutputPass());
-
+    this.output = new OutputPass(); this.output.renderToScreen = true;
+    const quad = (fragmentShader, uniforms) => new FullScreenQuad(new THREE.ShaderMaterial({
+      uniforms, fragmentShader, depthTest: false, depthWrite: false,
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    }));
+    this.mixQuad = quad(`uniform sampler2D tA, tB; uniform float k; varying vec2 vUv;
+      void main() { gl_FragColor = vec4(mix(texture2D(tA, vUv).rgb, texture2D(tB, vUv).rgb, k), 1.0); }`,
+      { tA: { value: this.emRT.texture }, tB: { value: this.mainRT.texture }, k: { value: 0 } });
+    this.combineQuad = quad(`uniform sampler2D tScene, tGlow; uniform float sceneAmt, glowAmt; varying vec2 vUv;
+      void main() { gl_FragColor = vec4(texture2D(tScene, vUv).rgb * sceneAmt + texture2D(tGlow, vUv).rgb * glowAmt, 1.0); }`,
+      { tScene: { value: this.mainRT.texture }, tGlow: { value: null }, sceneAmt: { value: 1 }, glowAmt: { value: 0 } });
+    this.emissionHook = null;          // (on: boolean) => void — set by main: switches the tile shader to emission-only
+    this.look = null;
     this.size = { w: 1, h: 1, dpr: 1 };
     this.flight = null;
     this.goTo('stand', true);
@@ -116,9 +113,9 @@ export class Stage {
     this.size = { w, h, dpr };
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, false);
-    this.composer.setPixelRatio(dpr);
-    this.composer.setSize(w, h);
-    this.save.renderTarget.setSize(Math.round(w * dpr), Math.round(h * dpr));
+    const W = Math.max(1, Math.round(w * dpr)), H = Math.max(1, Math.round(h * dpr));
+    for (const t of [this.mainRT, this.emRT, this.inRT, this.finalRT]) t.setSize(W, H);
+    this.bloom.setSize(W, H);
     this.camera.aspect = w / Math.max(h, 1);
     this.camera.updateProjectionMatrix();
   }
@@ -163,13 +160,34 @@ export class Stage {
     const s = this.sky.material.uniforms, view = P.diag.view;
     s.uTop.value.copy(look.skyTop); s.uHorizon.value.copy(look.horizon); s.uGlow.value = look.horizonGlow;
     this.sky.visible = view !== 'emission';
-    this.bloom.enabled = view === 'normal' || view === 'bloom';
-    this.diagPass.uniforms.uMode.value = view === 'bloom' ? 1 : 0;
+    this.look = look;
     this.bloom.strength = look.bloom; this.bloom.radius = look.bloomRadius; this.bloom.threshold = look.bloomThreshold;
     const tm = { aces: THREE.ACESFilmicToneMapping, agx: THREE.AgXToneMapping, neutral: THREE.NeutralToneMapping, none: THREE.NoToneMapping };
     this.renderer.toneMapping = tm[P.render.toneMapping] ?? THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = look.exposure;
   }
 
-  render() { this.composer.render(); }
+  render() {
+    const r = this.renderer, view = P.diag.view, look = this.look;
+    r.setRenderTarget(this.mainRT); r.clear(); r.render(this.scene, this.camera);
+
+    const glow = look && look.bloom > 0 && (view === 'normal' || view === 'bloom');
+    if (glow) {
+      if (look.bloomSky < 1) {
+        const skyWas = this.sky.visible;
+        this.sky.visible = false; this.emissionHook?.(true);
+        r.setRenderTarget(this.emRT); r.clear(); r.render(this.scene, this.camera);
+        this.sky.visible = skyWas; this.emissionHook?.(false);
+      }
+      this.mixQuad.material.uniforms.k.value = look.bloomSky;
+      r.setRenderTarget(this.inRT); this.mixQuad.render(r);
+      this.bloom.render(r, null, this.inRT, 0, false);
+    }
+    const c = this.combineQuad.material.uniforms;
+    c.tGlow.value = this.bloom.renderTargetsHorizontal[0].texture;
+    c.sceneAmt.value = view === 'bloom' ? 0 : 1;
+    c.glowAmt.value = glow ? 1 : 0;
+    r.setRenderTarget(this.finalRT); this.combineQuad.render(r);
+    this.output.render(r, null, this.finalRT);
+  }
 }

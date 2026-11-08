@@ -83,16 +83,47 @@ async def check():
     with open(os.path.join(OUT, 'check.json'), 'w') as f: json.dump(res, f, indent=2)
 
 
-async def diag_views():
+async def diag_views(look='av2'):
     """The four diagnostic views of one moment."""
     async with async_playwright() as p:
         b = await launch(p)
         page, logs, ok = await open_app(b)
         for view in ['normal', 'nobloom', 'bloom', 'emission', 'surface']:
-            await shot(page, 'av2', 'stand', extra=f"lp.P.diag.view = '{view}';", name=f'diag_{view}.png', clean=True)
+            await shot(page, look, 'stand', extra=f"lp.P.diag.view = '{view}';", name=f'diag_{look}_{view}.png', clean=True)
         await page.evaluate("window.__lp.P.diag.view = 'normal'")
         errs = [l for l in logs if l.startswith('[error]') or l.startswith('[pageerror]')]
         print('console errors:', len(errs)); print('\n'.join(errs[:10]))
+        await b.close()
+
+async def motion(looks=('av2', 'av2p'), seconds=3.0, fps=30):
+    """Short clips with a slowly orbiting camera, same excerpt and seed for each look,
+    composited side by side: checks temporal response and distant-rim stability."""
+    import subprocess, shutil
+    async with async_playwright() as p:
+        b = await launch(p)
+        page, logs, ok = await open_app(b, 960, 600)
+        await page.evaluate("document.body.classList.add('perform'); document.querySelector('.toggles').style.visibility='hidden'")
+        clips = []
+        for look in looks:
+            d = os.path.join(OUT, f'motion_{look}'); shutil.rmtree(d, ignore_errors=True); os.makedirs(d)
+            await page.evaluate(f"""() => {{ const lp = window.__lp; lp.state.running = false; lp.app.loadLook('a', '{look}');
+              lp.P.looks.morph = 0; lp.P.affector.on = false; lp.restart(); lp.stepSim(240); lp.goTo('stand'); }}""")
+            n = int(seconds * fps)
+            for i in range(n):
+                await page.evaluate(f"""() => {{ const lp = window.__lp; lp.stepSim(2);
+                  const a = {i} / {n} * 0.6 - 0.3, r = 26; lp.stage.camera.position.set(Math.sin(a) * r, 6.2, Math.cos(a) * r - 2);
+                  lp.stage.controls.target.set(0, 2.2, -14); lp.stage.controls.update(); }}""")
+                await page.evaluate('window.__fake.step(33.333)')
+                await page.screenshot(path=os.path.join(d, f'{i:04d}.png'))
+            out = os.path.join(OUT, f'motion_{look}.mp4')
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-framerate', str(fps), '-i', os.path.join(d, '%04d.png'),
+                            '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', out], check=True)
+            clips.append(out); print('saved', out)
+        if len(clips) == 2:
+            out = os.path.join(OUT, 'motion_' + '_vs_'.join(looks) + '.mp4')
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', clips[0], '-i', clips[1], '-filter_complex', 'hstack=inputs=2',
+                            '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', out], check=True)
+            print('saved', out)
         await b.close()
 
 async def ui_views():
@@ -113,5 +144,6 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     if args == ['check']: asyncio.run(check())
     elif args == ['ui']: asyncio.run(ui_views())
-    elif args == ['diag']: asyncio.run(diag_views())
+    elif args[:1] == ['motion']: asyncio.run(motion(tuple(args[1:3]) if len(args) >= 3 else ('av2', 'av2p')))
+    elif args[:1] == ['diag']: asyncio.run(diag_views(*(args[1:2] or ['av2'])))
     else: asyncio.run(captures(args or DEFAULT))

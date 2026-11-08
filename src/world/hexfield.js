@@ -17,7 +17,8 @@
 //  Update context, TouchDesigner's Feedback TOP on a position texture.
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
-import { NB, HIST, SIM_HZ, SQ3, P } from '../params.js';
+import { NB, HIST, SQ3, P } from '../params.js';
+import { SHADER_LOOK_KEYS } from '../looks.js';
 
 // Small seeded PRNG so a layout is reproducible from its seed.
 export function mulberry32(a) {
@@ -77,9 +78,14 @@ export function buildLayout(spawn) {
   return L;
 }
 
+// Shared fold used by the sub swell (GPU and CPU must agree, so sparks start on the surface).
+const FOLD = { kx: 0.075, wx: 0.35, kz: 0.06, wz: 0.27 };
+export const fold = (x, z, t) => 0.5 + 0.5 * Math.sin(x * FOLD.kx + t * FOLD.wx) * Math.cos(z * FOLD.kz - t * FOLD.wz);
+export const MIN_HEIGHT = 0.02;     // a negative pointer lift can press tiles down, never through the floor
+
 const vertexShader = /* glsl */`
   uniform sampler2D uHist;
-  uniform float uTime, uTravel, uExtrude, uShape, uFloor, uCeil, uSpread, uBase, uJitter, uGap, uSwell, uPulseVoice;
+  uniform float uTime, uRowHz, uRowShift, uTravel, uExtrude, uShape, uFloor, uCeil, uSpread, uBase, uJitter, uGap, uSwell, uPulseVoice;
   uniform vec4 uAff;            // x, z, radius, on
   uniform float uAffLift, uAffGlow;
   uniform vec3 uPalette[${NB}];
@@ -107,24 +113,24 @@ const vertexShader = /* glsl */`
   void main() {
     float voice = aTile.w;
     // UPDATE · the music reaches this tile d / travel seconds after the centre.
-    float row = uTravel > 0.0 ? aTile.z / uTravel * ${SIM_HZ.toFixed(1)} : 0.0;
+    float row = (uTravel > 0.0 ? aTile.z / uTravel * uRowHz : 0.0) + uRowShift;
     vec4 h = hist(voice, row);
     float presence = smoothstep(uFloor, uCeil, h.r);
 
-    // Threshold spread: each tile has its own threshold, so a louder voice lights more tiles.
+    // Activation variation: each tile has its own threshold, so a louder voice lights more tiles.
     float thr = aSeed.x * uSpread * 0.9;
     float act = smoothstep(thr, thr + mix(1.0, 0.12, uSpread), presence) * aSeed.y;
     float onset = h.g * aSeed.y * step(thr, presence + 0.05);
 
     float pulse = smoothstep(uFloor, uCeil, hist(uPulseVoice, row).r);
     float sub = smoothstep(uFloor, uCeil, hist(0.0, row).r);
-    float fold = 0.5 + 0.5 * sin(aTile.x * 0.075 + uTime * 0.35) * cos(aTile.y * 0.06 - uTime * 0.27);
+    float fold = 0.5 + 0.5 * sin(aTile.x * ${FOLD.kx} + uTime * ${FOLD.wx}) * cos(aTile.y * ${FOLD.kz} - uTime * ${FOLD.wz});
     float swell = uSwell * sub * fold;
 
-    // Affector: distance to a point you move (the hand in the Unity capture).
+    // Pointer: distance to a point you move (the hand in the Unity capture).
     float aff = uAff.w * pow(1.0 - smoothstep(0.0, uAff.z, length(aTile.xy - uAff.xy)), 2.0);
 
-    float height = uBase + aSeed.z * uJitter + uExtrude * pow(act, uShape) + swell + aff * uAffLift;
+    float height = max(uBase + aSeed.z * uJitter + uExtrude * pow(act, uShape) + swell + aff * uAffLift, ${MIN_HEIGHT});
     act = max(act, aff * uAffGlow);
 
     float s = 1.0 - uGap;
@@ -138,9 +144,18 @@ const vertexShader = /* glsl */`
   }
 `;
 
+// OUTPUT · every light contribution is its own term with its own control:
+//   base surface   face / side colour with restrained directional shading (readable with emission off)
+//   resting rim    restRim: the grid at rest
+//   rim breath     rimBreath × the rim mapping's level (a whole-floor pulse)
+//   responsive     rimResponse on the rim, fill across the face, sideGlow down the sides, × tile activation
+//   inner spill    light leaking inward from the rim, × the rim's brightness
+//   hit accent     hitAccent: coloured boost on a hit · hitWhiten: separate move toward white
+//   pointer        tint near the pointer
 const fragmentShader = /* glsl */`
   uniform vec3 uRim, uFace, uSide, uFogColor, uAffColor;
-  uniform float uRimWidth, uRimGlow, uRimPulse, uFillGlow, uFillCore, uSideGlow, uEdgeLines, uGrain, uFlash, uFog, uAffTint;
+  uniform float uRimWidth, uRestRim, uRimBreath, uRimResponse, uInnerSpill, uSpillFalloff, uFill, uFillCore;
+  uniform float uSideGlow, uSideFalloff, uTopLine, uEdgeLines, uHitAccent, uHitWhiten, uGrain, uFog, uAffTint;
   uniform float uDiag;          // 0 normal · 1 emission only · 2 surface only
 
   varying vec2 vLocal;
@@ -157,44 +172,49 @@ const fragmentShader = /* glsl */`
     // Distance to the hex edge on the top cap: 0 at the centre, 1 on the edge.
     vec2 q = abs(vLocal);
     float hexd = max(q.x, dot(q, vec2(0.5, 0.8660254))) / 0.8660254;
-    float aa = fwidth(hexd) * 1.2 + 1e-4;
-    float rim = smoothstep(1.0 - uRimWidth - aa, 1.0 - uRimWidth * 0.35, hexd);
-    float inner = pow(clamp(hexd, 0.0, 1.0), 5.0);
+    // Rim: a band of world width uRimWidth (in tile radii). aa is the screen footprint of one
+    // pixel in the same units. When the band is thinner than ~2 pixels its energy is scaled by
+    // its coverage, so distant rims fade instead of inflating into a glowing sheet.
+    float aa = fwidth(hexd) + 1e-4;
+    float inEdge = 1.0 - uRimWidth;
+    float rim = smoothstep(inEdge - aa, inEdge + aa, hexd);
+    rim *= clamp(uRimWidth / (2.0 * aa), 0.0, 1.0);
+    float inner = pow(clamp(hexd, 0.0, 1.0), uSpillFalloff);
 
     vec3 rimCol = mix(uRim, vColor, vAct);
-    float rimI = uRimGlow * (0.55 + 0.45 * uRimPulse * vPulse) + vAct * uFillGlow * 0.45 + vOnset * uFlash;
+    float rimI = uRestRim + uRimBreath * vPulse + uRimResponse * vAct + uHitAccent * vOnset;
 
-    // Top cap: stone face + voice fill (from the rim inward, or solid with Fill core) + rim.
+    // Top cap
     float g = uGrain * (vnoise(vWorld.xz * 3.1) * 0.6 + vnoise(vWorld.xz * 11.0) * 0.4 - 0.5);
     vec3 face = uFace * (1.0 + 2.0 * g);
-    vec3 fill = vColor * vAct * uFillGlow * mix(inner, 0.55 + 0.45 * inner, uFillCore);
-    vec3 topEmit = fill + rimCol * (rim * rimI + inner * 0.18 * rimI)
-                 + vec3(1.0) * vOnset * uFlash * 0.35 * rim;          // white-hot flash on hits
+    vec3 fill = vColor * vAct * uFill * mix(inner, 0.55 + 0.45 * inner, uFillCore);
+    vec3 topEmit = fill + rimCol * rimI * (rim + inner * uInnerSpill)
+                 + vec3(uHitWhiten * vOnset * rim);
 
-    // Sides: flat-shaded stone, the voice glowing down from the top edge.
+    // Sides: flat-shaded stone; the voice glows down from the top edge.
     vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
     float lit = 0.35 + 0.65 * max(dot(n, normalize(vec3(0.45, 0.7, 0.55))), 0.0);
-    float grad = pow(clamp(vY, 0.0, 1.0), mix(9.0, 2.6, vAct));        // glow hangs from the top edge
-    float topLine = smoothstep(1.0 - 0.07 / max(vHeight, 0.07), 1.0, vY);
+    float grad = pow(clamp(vY, 0.0, 1.0), mix(9.0, uSideFalloff, vAct));
+    float ly = 0.07 / max(vHeight, 0.07);
+    float topLine = smoothstep(1.0 - ly, 1.0, vY);
     float ang = atan(vLocal.x, vLocal.y) / 1.0471976;                // 60° segments
     float fa = abs(fract(ang + 0.5) - 0.5);
     float corner = 1.0 - smoothstep(0.0, fwidth(ang) * 1.5 + 0.02, fa);
     vec3 sideBase = uSide * lit * (0.5 + 0.5 * vY);
     vec3 sideEmit = vColor * grad * vAct * uSideGlow
-      + rimCol * topLine * rimI * 0.8
-      + rimCol * corner * uEdgeLines * (0.25 + vAct) * rimI * 0.5;
+      + rimCol * rimI * (topLine * uTopLine + corner * uEdgeLines * (0.25 + vAct) * 0.5);
 
     vec3 base = mix(sideBase, face, vTop);
     vec3 emit = mix(sideEmit, topEmit, vTop)
               + uAffColor * vAff * uAffTint * (0.25 + rim * vTop + topLine * (1.0 - vTop));
     if (uDiag > 1.5) emit = vec3(0.0);
     else if (uDiag > 0.5) base = vec3(0.0);
-    vec3 col = base + emit;
 
     float dist = length(vWorld.xz - cameraPosition.xz);           // ground distance: a high camera still sees a crisp floor
     float fog = 1.0 - exp(-pow(max(dist - 24.0, 0.0) * uFog, 1.5));   // clear near the viewer, haze toward the horizon
-    if (uDiag > 0.5 && uDiag < 1.5) { gl_FragColor = vec4(col * (1.0 - fog), 1.0); return; }
-    gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
+    // Emission-only (also the bloom source): emission fades with distance but never gains fog colour.
+    if (uDiag > 0.5 && uDiag < 1.5) { gl_FragColor = vec4(emit * (1.0 - fog), 1.0); return; }
+    gl_FragColor = vec4(mix(base + emit, uFogColor, fog), 1.0);
   }
 `;
 
@@ -219,9 +239,8 @@ export class HexField {
       uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
       uRim: { value: new THREE.Color() }, uFace: { value: new THREE.Color() }, uSide: { value: new THREE.Color() },
       uFogColor: { value: new THREE.Color() },
-      uRimWidth: { value: 0.1 }, uRimGlow: { value: 1 }, uRimPulse: { value: 1 }, uFillGlow: { value: 1 }, uFillCore: { value: 0 },
-      uSideGlow: { value: 1 }, uEdgeLines: { value: 0 }, uGrain: { value: 0 }, uFlash: { value: 1 }, uFog: { value: 0.01 },
-      uDiag: { value: 0 },
+      uRowHz: { value: 60 }, uRowShift: { value: 0 }, uDiag: { value: 0 },
+      ...Object.fromEntries(SHADER_LOOK_KEYS.map(k => ['u' + k[0].toUpperCase() + k.slice(1), { value: 0 }])),
     };
     this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader, fragmentShader });
     this.mesh = null;
@@ -249,9 +268,9 @@ export class HexField {
   }
 
   // Parameters → uniforms. `look` is a mixed look (colours are THREE.Color).
-  sync(look, time, aff) {
+  sync(look, time, aff, timing = { rowHz: 60, rowShift: 0 }) {
     const u = this.uniforms, I = P.init, U = P.update, A = P.affector;
-    u.uTime.value = time;
+    u.uTime.value = time; u.uRowHz.value = timing.rowHz; u.uRowShift.value = timing.rowShift;
     u.uTravel.value = U.travel; u.uExtrude.value = U.extrude; u.uShape.value = U.shape;
     u.uFloor.value = U.floor; u.uCeil.value = Math.max(U.ceil, U.floor + 0.01);
     u.uSpread.value = I.spread; u.uBase.value = I.base; u.uJitter.value = I.jitter; u.uGap.value = I.gap;
@@ -262,21 +281,25 @@ export class HexField {
     u.uRim.value.copy(look.rim); u.uFace.value.copy(look.face); u.uSide.value.copy(look.side);
     u.uFogColor.value.copy(look.horizon);
     u.uDiag.value = { emission: 1, surface: 2 }[P.diag.view] || 0;
-    for (const k of ['rimWidth', 'rimGlow', 'rimPulse', 'fillGlow', 'fillCore', 'sideGlow', 'edgeLines', 'grain', 'flash', 'fog'])
-      u['u' + k[0].toUpperCase() + k.slice(1)].value = look[k];
+    for (const k of SHADER_LOOK_KEYS) u['u' + k[0].toUpperCase() + k.slice(1)].value = look[k];
   }
 
-  // The same activation the vertex shader computes, on the CPU (sparks use it to find lit tiles).
-  activation(i, histAt) {
-    const L = this.layout, U = P.update, I = P.init;
-    const row = U.travel > 0 ? (L.d[i] / U.travel) * SIM_HZ : 0;
+  // The vertex shader's tile state, on the CPU, so sparks start exactly on the drawn surface
+  // (including sub swell and pointer lift). `aff` is the stage's affector {x, z, on}.
+  tileState(i, histAt, time, aff, rowHz = 60, rowShift = 0) {
+    const L = this.layout, U = P.update, I = P.init, A = P.affector;
+    const row = (U.travel > 0 ? (L.d[i] / U.travel) * rowHz : 0) + rowShift;
     const k = L.voice[i];
     const ss = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
-    const pres = ss(U.floor, Math.max(U.ceil, U.floor + 0.01), histAt(k, row, 0));
+    const ceil = Math.max(U.ceil, U.floor + 0.01);
+    const pres = ss(U.floor, ceil, histAt(k, row, 0));
     const thr = L.gate[i] * I.spread * 0.9;
     const act = ss(thr, thr + (1 + (0.12 - 1) * I.spread), pres) * L.live[i];
     const onset = histAt(k, row, 1) * L.live[i] * (pres + 0.05 >= thr ? 1 : 0);
-    const height = I.base + L.jitter[i] * I.jitter + U.extrude * Math.pow(act, U.shape);
+    const swell = U.swell * ss(U.floor, ceil, histAt(0, row, 0)) * fold(L.x[i], L.z[i], time);
+    const dA = Math.hypot(L.x[i] - aff.x, L.z[i] - aff.z);
+    const affV = aff.on * Math.pow(1 - ss(0, A.radius, dA), 2);
+    const height = Math.max(I.base + L.jitter[i] * I.jitter + U.extrude * Math.pow(act, U.shape) + swell + affV * A.lift, MIN_HEIGHT);
     return { act, onset, height };
   }
 }
