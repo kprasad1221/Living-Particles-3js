@@ -29,83 +29,111 @@ export const SQ3 = Math.sqrt(3);
 export const BAND_EDGES = [30, 60, 150, 400, 1000, 2500, 5000, 10000, 16000];
 export const VOICE_NAMES = ['sub', 'bass', 'low mid', 'mid', 'upper mid', 'presence', 'brilliance', 'air'];
 
+// Timing convention for every rise/fall shown in the interface: milliseconds to cover 90 %
+// of a step (rise) or to decay by 90 % (fall). One-pole coefficient per update of dt seconds:
+//   c = 1 − exp(−ln(10) · dt / t90)      (t90 = half-life × log2(10) ≈ 3.32 × half-life)
+export const t90coef = (ms, dt) => ms <= 0 ? 1 : 1 - Math.exp(-Math.LN10 * dt / (ms / 1000));
+export const GLOBAL = 8;           // history column 8 holds the global (whole-spectrum) level
+
 export const P = {
-  // SPAWN — capacity and arrangement. Changing these rebuilds the field.
-  spawn: {
-    rings: 52,             // field radius in hex rings, cut to a disc (52 → about 7,400 tiles)
+  // FLOOR — what exists. Field size, layout and seed rebuild the tiles; the rest do not.
+  floor: {
+    rings: 52,             // field radius in hex rings, cut to a disc (52 → 7,471 tiles)
     pattern: 'rings',      // rings | sectors | spiral | scatter — how voices are laid on the floor
     ringWidth: 2.5,        // width of one voice band, in tiles
     order: 'low-in',       // low-in: bass at the centre · high-in: air at the centre
-    scatter: 0.18,         // share of tiles given a random voice instead (the scattered pops)
-    density: 0.7,          // share of tiles that answer at all; the rest stay pure grid
+    scatter: 0.18,         // share of tiles given a random voice instead
+    active: 0.7,           // share of tiles eligible to respond; the rest stay pure grid
     seed: 7,
-  },
-
-  // INITIALIZE — what every tile is born with.
-  init: {
-    spread: 0.7,           // threshold spread: 0 = a band's tiles move as one · 1 = they pop one by one as it gets louder
+    variation: 0.7,        // activation variation: 0 = a voice's tiles respond together, 1 = spread through the population
     gap: 0.06,             // empty margin around each tile, fraction of the cell
-    base: 0.14,            // resting height
+    rest: 0.14,            // resting height, scene units
     jitter: 0.06,          // random extra resting height
   },
 
-  // UPDATE — how the floor answers the voices.
-  update: {
-    travel: 22,            // how fast the music travels outward from the centre, units/s (0 = everywhere at once)
-    extrude: 1.8,          // column height at full activation
-    shape: 1.4,            // activation → height curve (1 linear, >1 snappier)
-    floor: 0.22,           // presence curve: smoothstep(floor, ceil, level)
-    ceil: 0.92,
-    pulseVoice: 1,         // the voice the whole grid's rim breathes with (1 = bass)
-    swell: 0.5,            // sub voice lifts the floor in broad, slow folds
+  // MOVEMENT — how far and how the floor moves.
+  movement: {
+    lift: 1.8,             // maximum lift: extra height at full activation, scene units
+    curve: 1.4,            // activation → height (1 linear, >1 snappier)
+    floor: 0.22,           // activation threshold: below this a tile is at rest
+    ceil: 0.92,            // … at or above this it is fully active
+    ripple: 'outward',     // instant | outward
+    travel: 22,            // outward ripple speed, scene units/s (edge arrival = radius / travel)
+    swell: 0.5,            // sub lifts the floor in broad, slow folds
   },
 
-  // Voice analysis (the Signal side). Same model as Audio Geology 02.2.
-  voices: {
-    attack: 0.012,         // envelope attack half-life, s
-    releaseLow: 0.24,      // release half-life of sub, s
-    releaseHigh: 0.06,     // … of air (log-interpolated in between)
-    onset: 1.8,            // onset when the rise beats this × the band's recent average rise
+  // MUSIC — how sound becomes control signals. Measurement → gate → level (dB) → normalised.
+  music: {
+    normalize: 'preserve', // preserve: fixed reference, quiet stays quiet · adaptive: bounded slow reference
+    gain: 0,               // input gain, dB
+    noiseFloor: -60,       // gate closes below this (dB re full-scale sine)
+    gateHyst: 6,           // gate opens this many dB above the floor
+    gateOpen: 10,          // ms to 90 % open
+    gateClose: 150,        // ms to 90 % closed
+    reference: -6,         // the level that reads as full scale, dB
+    tilt: 2.5,             // dB per octave added above 500 Hz (music usually falls with frequency)
+    curve: 1.6,            // transfer curve exponent, dB-normalised → output
+    adapt: 0.5,            // adaptive mode only: how much of the ±12 dB adaptation applies
+    hitSensitivity: 5,     // 0–10, higher triggers more easily
+    cooldownLow: 80,       // ms before a low voice (sub … mid) can trigger again
+    cooldownHigh: 40,      // ms for the high voices
+    syncOffset: 0,         // ms, visual delay added after output latency (device-specific alignment)
   },
 
-  // The affector — the Living Particles idea: tiles answer the distance to a point you move.
-  affector: {
+  // MAPPINGS — musical source → visual destination, each with its own sensitivity and timing.
+  map: {
+    lift:   { sensitivity: 1, curve: 1, rise: 40, fall: 797, fallHigh: 199, amount: 1 },  // each tile's own voice
+    rim:    { source: 1, sensitivity: 1, curve: 1, rise: 40, fall: 600, amount: 1 },      // source: voice 0–7 or 8 = global
+    hits:   { rise: 0, hold: 0, fall: 332, amount: 1 },                                   // event envelope (accent + flash)
+    colour: { source: 0, sensitivity: 1, curve: 1, rise: 1500, fall: 4000, amount: 0 },   // slow hue migration toward the next voice colour
+  },
+
+  // POINTER — the Living Particles affector: tiles answer the distance to a point you move.
+  pointer: {
     on: true,
     mode: 'pointer',       // pointer | orbit (a slow path, for when your hands are elsewhere)
     radius: 9,
-    lift: 1.8,
+    lift: 1.8,             // may be negative: presses tiles down, never through the floor
     glow: 0.9,
     tint: 0.6,
     color: '#ffffff',
     speed: 0.25,           // orbit mode only
   },
 
-  // Sparks — a second particle system with real lifetimes (Spawn → Initialize → Update → Output).
+  // SPARKS — a second particle system with real lifetimes.
   sparks: {
     on: true,
     from: 'highs',         // highs (presence, brilliance, air) | mids+highs | all
-    burst: 0.5,            // chance a flashing tile throws sparks on a given step
-    shimmer: 0.0,          // steady emission from loud tiles, sparks/s per voice at full level
-    speed: 5.5,
-    life: 1.3,
+    perHit: 40,            // particles per hit event (a finite budget, spread over the ripple)
+    continuous: 0,         // particles per second per voice at full level
+    speed: 5.5,            // launch speed, units/s
+    cone: 35,              // launch cone half-angle from vertical, degrees
+    life: 1.3,             // lifetime, s
     gravity: -4,
     turbulence: 1.1,
+    turbScale: 1.0,
     size: 0.32,
     bright: 1.4,
   },
 
-  // OUTPUT — Look A and Look B are full copies of this shape; what you see is mix(A, B, morph).
-  looks: { a: 'av2p', b: 'av2', morph: 0, drive: 'hand', edit: 'a' },   // drive: hand | lfo | v0…v7
+  // PERFORMANCE MACROS — each scales exactly one thing, nothing else.
+  macros: {
+    movement: 1,           // × maximum lift
+    sparks: 1,             // × particles per hit and continuous emission
+    glow: 1,               // × glow amount (bloom strength)
+  },
+
+  // OUTPUT — Look A and Look B are full copies of a look; what you see is mix(A, B, morph).
+  looks: { a: 'av2p', b: 'av2', morph: 0, drive: 'hand', edit: 'a', preview: 'mix' },   // drive: hand | lfo | v0…v7
 
   camera: { drift: false, driftSpeed: 0.25, fov: 55 },
   render: { scale: 1, toneMapping: 'neutral' },
 
   // ── Transient: never saved in a scene ──────────────────────────────────────
-  // Diagnostic view: normal | nobloom | bloom (bloom contribution only) | emission | surface
-  diag: { view: 'normal' },
-  // Manual test: inject a known level and single hits after the detector, so shader
-  // behaviour can be checked separately from audio detection.
-  manual: { on: false, voice: 1, level: 0.8 },
+  diag: { view: 'normal' },                    // normal | nobloom | bloom | emission | surface
+  manual: { on: false, voice: 1, level: 0.8 }, // a known level and single hits, injected after the detector
+  solo: { dest: 'none' },                      // none | lift | rim | hits | colour | sparks
+  inspect: { dest: 'lift', voice: 1 },         // which mapping the meters show
 };
 
 // The shape of a look lives in looks.js (LOOK_KEYS).

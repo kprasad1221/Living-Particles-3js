@@ -11,7 +11,6 @@ os.makedirs(OUT, exist_ok=True)
 NM = os.environ.get('LP_NODE_MODULES', os.path.join(HERE, 'node_modules'))
 CDN = {
   'https://cdn.jsdelivr.net/npm/three@0.186.0/': NM + '/three/',
-  'https://cdn.jsdelivr.net/npm/tweakpane@4.0.5/': NM + '/tweakpane/',
 }
 FAKE_CLOCK = r"""
 (() => {

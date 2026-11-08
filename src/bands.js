@@ -21,8 +21,7 @@
 //  the row d / travel seconds old — that is how the music travels outward as
 //  rings. It is the Trail CHOP / Cache TOP idea: the past kept as data.
 // ─────────────────────────────────────────────────────────────────────────────
-import * as THREE from 'three';
-import { NB, HIST, P, SIM_HZ, BAND_EDGES } from './params.js';
+import { NB, P, SIM_HZ, BAND_EDGES } from './params.js';
 
 const coef = halfLife => 1 - Math.pow(2, -1 / (SIM_HZ * Math.max(halfLife, 1e-4)));
 const PEAK_HALF = 3.0, FLOOR_HALF = 8.0, FLUX_HALF = 1.0, ONSET_HALF = 0.1;
@@ -34,12 +33,7 @@ export const bands = {
   peak: new Float32Array(NB), floor: new Float32Array(NB), flux: new Float32Array(NB),
   refractory: new Int32Array(NB),
   started: false,
-  hist: new Float32Array(HIST * NB * 4),
-  tex: null,
 };
-bands.tex = new THREE.DataTexture(bands.hist, NB, HIST, THREE.RGBAFormat, THREE.FloatType);
-bands.tex.minFilter = bands.tex.magFilter = THREE.NearestFilter;
-bands.tex.needsUpdate = true;
 
 function bandMean(arr, binHz, f0, f1) {
   const i0 = Math.max(1, Math.floor(f0 / binHz));
@@ -51,7 +45,7 @@ function bandMean(arr, binHz, f0, f1) {
 
 // One analysis step. hi: the 512-bin spectrum (hiHz per bin); low: optional finer spectrum.
 export function cookBands(hi, hiHz, low, lowHz) {
-  const v = P.voices;
+  const v = { attack: 0.012, releaseLow: 0.24, releaseHigh: 0.06, onset: 1 + (10 - P.music.hitSensitivity) * 0.2 };
   const atk = coef(v.attack);
   for (let k = 0; k < NB; k++) {
     const raw = (k < 4 && low) ? bandMean(low, lowHz, BAND_EDGES[k], BAND_EDGES[k + 1])
@@ -87,27 +81,7 @@ export function applyManual() {
   if (pendingHit >= 0) { bands.onset[pendingHit] = 1; bands.hit[pendingHit] = 1; pendingHit = -1; }
 }
 
-// Push the present into row 0; everything else moves one row older.
-export function depositBands() {
-  const row = NB * 4;
-  bands.hist.copyWithin(row, 0, (HIST - 1) * row);
-  for (let k = 0; k < NB; k++) {
-    const i = k * 4;
-    bands.hist[i] = bands.level[k]; bands.hist[i + 1] = bands.onset[k]; bands.hist[i + 2] = bands.norm[k]; bands.hist[i + 3] = 1;
-  }
-  bands.tex.needsUpdate = true;
-}
-
-// CPU read of the history, same interpolation as the shader (used to place sparks).
-export function histAt(voice, row, channel = 0) {
-  row = Math.min(Math.max(row, 0), HIST - 1);
-  const r0 = Math.floor(row), r1 = Math.min(r0 + 1, HIST - 1), f = row - r0;
-  const a = bands.hist[(r0 * NB + voice) * 4 + channel], b = bands.hist[(r1 * NB + voice) * 4 + channel];
-  return a + (b - a) * f;
-}
-
 export function clearBands() {
   for (const a of [bands.raw, bands.norm, bands.prev, bands.level, bands.onset, bands.flux]) a.fill(0);
-  bands.refractory.fill(0); bands.hit.fill(0); bands.hist.fill(0); bands.started = false;
-  bands.tex.needsUpdate = true;
+  bands.refractory.fill(0); bands.hit.fill(0); bands.started = false;
 }

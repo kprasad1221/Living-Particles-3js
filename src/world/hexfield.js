@@ -17,7 +17,7 @@
 //  Update context, TouchDesigner's Feedback TOP on a position texture.
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
-import { NB, HIST, SQ3, P } from '../params.js';
+import { NB, HIST, SQ3, P, GLOBAL } from '../params.js';
 import { SHADER_LOOK_KEYS } from '../looks.js';
 
 // Small seeded PRNG so a layout is reproducible from its seed.
@@ -68,7 +68,7 @@ export function buildLayout(spawn) {
       if (spawn.order === 'high-in') k = NB - 1 - k;
       L.x[i] = x; L.z[i] = z; L.d[i] = d; L.voice[i] = k;
       L.gate[i] = rand();
-      L.live[i] = rand() < spawn.density ? 1 : 0;
+      L.live[i] = rand() < spawn.active ? 1 : 0;
       L.jitter[i] = rand(); L.rnd[i] = rand();
       if (L.live[i]) L.byVoice[k].push(i);
       L.radius = Math.max(L.radius, d);
@@ -85,7 +85,8 @@ export const MIN_HEIGHT = 0.02;     // a negative pointer lift can press tiles d
 
 const vertexShader = /* glsl */`
   uniform sampler2D uHist;
-  uniform float uTime, uRowHz, uRowShift, uTravel, uExtrude, uShape, uFloor, uCeil, uSpread, uBase, uJitter, uGap, uSwell, uPulseVoice;
+  uniform float uTime, uRowHz, uRowShift, uTravel, uExtrude, uShape, uFloor, uCeil, uSpread, uBase, uJitter, uGap, uSwell, uRimSource;
+  uniform vec4 uAmt;            // destination amounts × solo: lift, hits, rim, colour
   uniform vec4 uAff;            // x, z, radius, on
   uniform float uAffLift, uAffGlow;
   uniform vec3 uPalette[${NB}];
@@ -104,7 +105,7 @@ const vertexShader = /* glsl */`
   vec4 hist(float voice, float row) {
     row = clamp(row, 0.0, ROWS - 1.0);
     float r0 = floor(row);
-    float u = (voice + 0.5) / ${NB.toFixed(1)};
+    float u = (voice + 0.5) / ${(NB + 1).toFixed(1)};
     vec4 a = texture2D(uHist, vec2(u, (r0 + 0.5) / ROWS));
     vec4 b = texture2D(uHist, vec2(u, (min(r0 + 1.0, ROWS - 1.0) + 0.5) / ROWS));
     return mix(a, b, row - r0);
@@ -114,16 +115,17 @@ const vertexShader = /* glsl */`
     float voice = aTile.w;
     // UPDATE · the music reaches this tile d / travel seconds after the centre.
     float row = (uTravel > 0.0 ? aTile.z / uTravel * uRowHz : 0.0) + uRowShift;
-    vec4 h = hist(voice, row);
-    float presence = smoothstep(uFloor, uCeil, h.r);
+    vec4 h = hist(voice, row);                     // r lift · g hit · b rim · a colour
+    float presence = smoothstep(uFloor, uCeil, h.r) * uAmt.x;
 
     // Activation variation: each tile has its own threshold, so a louder voice lights more tiles.
     float thr = aSeed.x * uSpread * 0.9;
     float act = smoothstep(thr, thr + mix(1.0, 0.12, uSpread), presence) * aSeed.y;
-    float onset = h.g * aSeed.y * step(thr, presence + 0.05);
+    float onset = h.g * uAmt.y * aSeed.y * step(thr, presence + 0.05);
 
-    float pulse = smoothstep(uFloor, uCeil, hist(uPulseVoice, row).r);
-    float sub = smoothstep(uFloor, uCeil, hist(0.0, row).r);
+    float pulse = hist(uRimSource, row).b * uAmt.z;
+    float sub = smoothstep(uFloor, uCeil, hist(0.0, row).r) * uAmt.x;
+    float drift = clamp(h.a * uAmt.w, 0.0, 1.0);
     float fold = 0.5 + 0.5 * sin(aTile.x * ${FOLD.kx} + uTime * ${FOLD.wx}) * cos(aTile.y * ${FOLD.kz} - uTime * ${FOLD.wz});
     float swell = uSwell * sub * fold;
 
@@ -138,7 +140,8 @@ const vertexShader = /* glsl */`
 
     vLocal = position.xz; vY = position.y; vTop = step(0.5, normal.y);
     vAct = act; vOnset = onset; vPulse = pulse; vAff = aff; vHeight = height;
-    vColor = uPalette[int(voice + 0.5)];
+    int vi = int(voice + 0.5);
+    vColor = mix(uPalette[vi], uPalette[int(mod(float(vi) + 1.0, ${NB}.0))], drift);
     vWorld = wp;
     gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
   }
@@ -233,7 +236,7 @@ export class HexField {
       uHist: { value: histTex }, uTime: { value: 0 },
       uTravel: { value: 0 }, uExtrude: { value: 0 }, uShape: { value: 1 }, uFloor: { value: 0.2 }, uCeil: { value: 0.9 },
       uSpread: { value: 0.5 }, uBase: { value: 0.1 }, uJitter: { value: 0 }, uGap: { value: 0.05 }, uSwell: { value: 0 },
-      uPulseVoice: { value: 1 },
+      uRimSource: { value: 1 }, uAmt: { value: new THREE.Vector4(1, 1, 1, 0) },
       uAff: { value: new THREE.Vector4(0, 0, 8, 0) }, uAffLift: { value: 0 }, uAffGlow: { value: 0 },
       uAffTint: { value: 0 }, uAffColor: { value: new THREE.Color(1, 1, 1) },
       uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
@@ -268,15 +271,25 @@ export class HexField {
   }
 
   // Parameters → uniforms. `look` is a mixed look (colours are THREE.Color).
-  sync(look, time, aff, timing = { rowHz: 60, rowShift: 0 }) {
-    const u = this.uniforms, I = P.init, U = P.update, A = P.affector;
-    u.uTime.value = time; u.uRowHz.value = timing.rowHz; u.uRowShift.value = timing.rowShift;
-    u.uTravel.value = U.travel; u.uExtrude.value = U.extrude; u.uShape.value = U.shape;
-    u.uFloor.value = U.floor; u.uCeil.value = Math.max(U.ceil, U.floor + 0.01);
-    u.uSpread.value = I.spread; u.uBase.value = I.base; u.uJitter.value = I.jitter; u.uGap.value = I.gap;
-    u.uSwell.value = U.swell; u.uPulseVoice.value = U.pulseVoice;
-    u.uAff.value.set(aff.x, aff.z, A.radius, aff.on);
+  // Parameters → uniforms that the CPU also relies on (ripple delay, heights for spark origins).
+  // Called whenever the music advances, so it never depends on a frame being drawn.
+  syncParams(aff) {
+    const u = this.uniforms, F = P.floor, Mv = P.movement, A = P.pointer, M = P.map;
+    u.uTravel.value = Mv.ripple === 'outward' ? Mv.travel : 0;
+    u.uExtrude.value = Mv.lift * M.lift.amount * P.macros.movement; u.uShape.value = Mv.curve;
+    u.uFloor.value = Mv.floor; u.uCeil.value = Math.max(Mv.ceil, Mv.floor + 0.01);
+    u.uSpread.value = F.variation; u.uBase.value = F.rest; u.uJitter.value = F.jitter; u.uGap.value = F.gap;
+    u.uSwell.value = Mv.swell; u.uRimSource.value = M.rim.source;
+    const solo = P.solo.dest, on = d => (solo === 'none' || solo === d ? 1 : 0);
+    u.uAmt.value.set(on('lift'), M.hits.amount * on('hits'), M.rim.amount * on('rim'), M.colour.amount * on('colour'));
+    u.uAff.value.set(aff.x, aff.z, A.radius, aff.on * (solo === 'none' ? 1 : 0));
     u.uAffLift.value = A.lift; u.uAffGlow.value = A.glow; u.uAffTint.value = A.tint; u.uAffColor.value.set(A.color);
+  }
+
+  sync(look, time, aff, timing = { rowHz: 60, rowShift: 0 }) {
+    const u = this.uniforms;
+    u.uTime.value = time; u.uRowHz.value = timing.rowHz; u.uRowShift.value = timing.rowShift;
+    this.syncParams(aff);
     for (let k = 0; k < NB; k++) u.uPalette.value[k].copy(look['v' + k]);
     u.uRim.value.copy(look.rim); u.uFace.value.copy(look.face); u.uSide.value.copy(look.side);
     u.uFogColor.value.copy(look.horizon);
@@ -287,19 +300,20 @@ export class HexField {
   // The vertex shader's tile state, on the CPU, so sparks start exactly on the drawn surface
   // (including sub swell and pointer lift). `aff` is the stage's affector {x, z, on}.
   tileState(i, histAt, time, aff, rowHz = 60, rowShift = 0) {
-    const L = this.layout, U = P.update, I = P.init, A = P.affector;
-    const row = (U.travel > 0 ? (L.d[i] / U.travel) * rowHz : 0) + rowShift;
-    const k = L.voice[i];
-    const ss = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
-    const ceil = Math.max(U.ceil, U.floor + 0.01);
-    const pres = ss(U.floor, ceil, histAt(k, row, 0));
-    const thr = L.gate[i] * I.spread * 0.9;
-    const act = ss(thr, thr + (1 + (0.12 - 1) * I.spread), pres) * L.live[i];
-    const onset = histAt(k, row, 1) * L.live[i] * (pres + 0.05 >= thr ? 1 : 0);
-    const swell = U.swell * ss(U.floor, ceil, histAt(0, row, 0)) * fold(L.x[i], L.z[i], time);
-    const dA = Math.hypot(L.x[i] - aff.x, L.z[i] - aff.z);
-    const affV = aff.on * Math.pow(1 - ss(0, A.radius, dA), 2);
-    const height = Math.max(I.base + L.jitter[i] * I.jitter + U.extrude * Math.pow(act, U.shape) + swell + affV * A.lift, MIN_HEIGHT);
+    const L = this.layout, u = this.uniforms;
+    const row = (u.uTravel.value > 0 ? (L.d[i] / u.uTravel.value) * rowHz : 0) + rowShift;
+    const k = L.voice[i], amt = u.uAmt.value;
+    const sm = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
+    const lo = u.uFloor.value, hi = u.uCeil.value, sp = u.uSpread.value;
+    const pres = sm(lo, hi, histAt(k, row, 0)) * amt.x;
+    const thr = L.gate[i] * sp * 0.9;
+    const act = sm(thr, thr + (1 + (0.12 - 1) * sp), pres) * L.live[i];
+    const onset = histAt(k, row, 1) * amt.y * L.live[i] * (pres + 0.05 >= thr ? 1 : 0);
+    const swell = u.uSwell.value * sm(lo, hi, histAt(0, row, 0)) * amt.x * fold(L.x[i], L.z[i], time);
+    const av = u.uAff.value, dA = Math.hypot(L.x[i] - av.x, L.z[i] - av.y);
+    const affV = av.w * Math.pow(1 - sm(0, av.z, dA), 2);
+    const height = Math.max(u.uBase.value + L.jitter[i] * u.uJitter.value + u.uExtrude.value * Math.pow(act, u.uShape.value)
+      + swell + affV * u.uAffLift.value, MIN_HEIGHT);
     return { act, onset, height };
   }
 }

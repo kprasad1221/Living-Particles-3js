@@ -1,29 +1,31 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  SPARKS — a particle system with real lifetimes, the way VFX Graph lays it out.
+//  SPARKS — a particle system with real lifetimes, driven by discrete hit events.
 //
-//    SPAWN       CPU, per 60 Hz step: sample tiles of the emitting voices; a tile whose
-//                delayed onset is flashing may throw sparks (Burst), a loud tile may
-//                emit steadily (Shimmer). VFX Graph: Spawn context + GPU events.
-//    INITIALIZE  write one slot of a ring buffer: start position, velocity, birth time,
-//                lifetime, voice, seed. VFX Graph: Initialize Particle.
-//    UPDATE      none stored. The vertex shader evaluates the motion in closed form from
-//                age = now − birth: p = p0 + v·age + ½·g·age² + turbulence.
-//                VFX Graph: Update Particle (Gravity, Turbulence, Age) — here as maths.
-//    OUTPUT      additive point sprites, size and alpha over life, voice colour.
-//                VFX Graph: Output Particle Quad with Size/Color over Life.
+//    SPAWN       one hit event (id, voice, time, strength) gets one finite budget:
+//                perHit × strength particles, spread over tiles of that voice. With an
+//                outward ripple each particle's birth is scheduled for when the ripple
+//                reaches its tile. Nothing re-emits because a flash is still bright.
+//                Continuous emission adds particles/s in proportion to a voice's level.
+//    INITIALIZE  one ring-buffer slot: start (tile top at birth), velocity in a cone,
+//                birth time, lifetime, voice, seed. Births can lie in the future; the
+//                shader hides a particle until its birth, so a late frame never shifts
+//                a gesture — the particle simply appears at its correct age.
+//    UPDATE      none stored: p = p0 + v·age + ½·g·age² + turbulence, in the shader.
+//    OUTPUT      additive sprites, coloured body + separate white core, size/alpha over life.
 //
-//  Capacity is fixed (like VFX Graph's capacity). When it is full the oldest slot is
-//  reused. Only the slots written this frame are uploaded to the GPU.
+//  Randomness is seeded from the event id, so the same music and seed give the same
+//  sparks at any frame rate. Capacity is fixed; when full the oldest slot is reused and
+//  any still-living particle it held is counted as dropped.
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import { NB, P } from '../params.js';
-import { histAt, bands } from '../bands.js';
+import { histAt } from '../response.js';
 import { mulberry32 } from './hexfield.js';
 
 export const CAPACITY = 8192;
 
 const vertexShader = /* glsl */`
-  uniform float uTime, uGravity, uTurb, uSize, uPixel;
+  uniform float uTime, uGravity, uTurb, uTurbScale, uSize, uPixel;
   uniform vec3 uPalette[${NB}];
   attribute vec4 aStart;   // xyz, birth time
   attribute vec4 aVel;     // xyz, lifetime
@@ -36,10 +38,12 @@ const vertexShader = /* glsl */`
     if (t < 0.0 || t > 1.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; vAlpha = 0.0; return; }
     vec3 p = aStart.xyz + aVel.xyz * age + vec3(0.0, 0.5 * uGravity * age * age, 0.0);
     float ph = aMeta.y * 6.2831;
-    p += uTurb * age * vec3(sin(p.y * 0.9 + ph + uTime * 1.7), 0.35 * sin(p.x * 0.6 + uTime * 1.1 + ph), cos(p.y * 0.8 + ph * 1.3 - uTime * 1.4));
+    vec3 q = p * uTurbScale;
+    p += uTurb * age * vec3(sin(q.y * 0.9 + ph + uTime * 1.7), 0.35 * sin(q.x * 0.6 + uTime * 1.1 + ph), cos(q.y * 0.8 + ph * 1.3 - uTime * 1.4));
     vec4 mv = viewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
-    float life = smoothstep(0.0, 0.06, t) * (1.0 - t);
+    // short appearance ramp, shaped fade
+    float life = smoothstep(0.0, 0.06, t) * (1.0 - smoothstep(0.45, 1.0, t));
     gl_PointSize = uSize * uPixel * (0.4 + 0.6 * life) / max(-mv.z, 0.1);
     vColor = uPalette[int(aMeta.x + 0.5)];
     vAlpha = life;
@@ -57,8 +61,9 @@ const fragmentShader = /* glsl */`
   }
 `;
 
-const EMITTERS = { highs: [5, 6, 7], 'mids+highs': [3, 4, 5, 6, 7], all: [0, 1, 2, 3, 4, 5, 6, 7] };
-const SAMPLES = 72;          // tiles tested per emitting voice per step
+export const EMITTERS = { highs: [5, 6, 7], 'mids+highs': [3, 4, 5, 6, 7], all: [0, 1, 2, 3, 4, 5, 6, 7] };
+
+const hashStr = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 
 export class Sparks {
   constructor() {
@@ -70,8 +75,9 @@ export class Sparks {
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(CAPACITY * 3), 3));
     g.setAttribute('aStart', this.start); g.setAttribute('aVel', this.vel); g.setAttribute('aMeta', this.meta);
     this.uniforms = {
-      uTime: { value: 0 }, uGravity: { value: -4 }, uTurb: { value: 1 }, uSize: { value: 0.3 }, uPixel: { value: 500 },
-      uBright: { value: 1 }, uCore: { value: 0.6 }, uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
+      uTime: { value: 0 }, uGravity: { value: -4 }, uTurb: { value: 1 }, uTurbScale: { value: 1 }, uSize: { value: 0.3 },
+      uPixel: { value: 500 }, uBright: { value: 1 }, uCore: { value: 0.6 },
+      uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader, fragmentShader,
@@ -79,55 +85,62 @@ export class Sparks {
     });
     this.points = new THREE.Points(g, this.material);
     this.points.frustumCulled = false;
-    this.cursor = 0; this.lo = Infinity; this.hi = -1;   // dirty range this frame
-    this.reseed(1);
-    this.steady = new Float32Array(NB);                   // shimmer accumulators
-    this.alive = 0; this.spawned = 0;
+    this.cursor = 0; this.lo = Infinity; this.hi = -1;
+    this.seed = 1; this.steady = new Float32Array(NB);
+    this.stats = { events: 0, emitted: 0, dropped: 0, alive: 0 };
+    this.now = 0;
   }
 
-  emit(x, y, z, voice, time) {
-    const S = P.sparks, r = this.rand, i = this.cursor;
-    const a = r() * Math.PI * 2, spread = 0.35 + 0.65 * r();
-    const sp = S.speed * (0.55 + 0.45 * r());
-    this.start.array.set([x + (r() - 0.5) * 0.8, y + 0.05, z + (r() - 0.5) * 0.8, time], i * 4);
-    this.vel.array.set([Math.cos(a) * sp * 0.35 * spread, sp, Math.sin(a) * sp * 0.35 * spread, S.life * (0.6 + 0.4 * r())], i * 4);
-    this.meta.array.set([voice, r()], i * 2);
+  reseed(seed) { this.seed = seed | 0; }
+
+  emit(x, y, z, voice, birth, rand) {
+    const S = P.sparks, i = this.cursor, s = this.start.array, v = this.vel.array;
+    if (s[i * 4 + 3] + v[i * 4 + 3] > this.now) this.stats.dropped++;      // overwriting a particle that is still alive
+    const cone = (S.cone * Math.PI) / 180;
+    const cosT = 1 - rand() * (1 - Math.cos(cone)), sinT = Math.sqrt(1 - cosT * cosT), az = rand() * Math.PI * 2;
+    const sp = S.speed * (0.6 + 0.4 * rand());
+    s.set([x + (rand() - 0.5) * 0.8, y + 0.05, z + (rand() - 0.5) * 0.8, birth], i * 4);
+    v.set([Math.cos(az) * sinT * sp, cosT * sp, Math.sin(az) * sinT * sp, S.life * (0.65 + 0.35 * rand())], i * 4);
+    this.meta.array.set([voice, rand()], i * 2);
     this.lo = Math.min(this.lo, i); this.hi = Math.max(this.hi, i);
     this.cursor = (i + 1) % CAPACITY;
-    if (this.cursor === 0) { this.flush(); }                // wrapped: upload what we have, start a new range
-    this.spawned++;
+    if (this.cursor === 0) this.flush();
+    this.stats.emitted++;
   }
 
-  // SPAWN: called once per simulation step.
-  step(field, time, dt, aff) {
+  // One hit event → one finite budget. `delayOf(i)` gives the ripple delay (s) for tile i.
+  burst(ev, field, aff, delayOf) {
     const S = P.sparks;
-    if (!S.on || !field.layout) return;
-    const L = field.layout, r = this.rand;
+    if (!S.on || !field.layout || !(EMITTERS[S.from] || EMITTERS.highs).includes(ev.voice)) return 0;
+    const list = field.layout.byVoice[ev.voice];
+    if (!list.length) return 0;
+    // seeded from the event's place in the music (loop : index), not the restart epoch, so the same
+    // music and seed give the same sparks after any restart
+    const L = field.layout, rand = mulberry32(hashStr(ev.id.slice(ev.id.indexOf(':') + 1)) ^ (this.seed * 2654435761));
+    const n = Math.round(S.perHit * P.macros.sparks * (0.4 + 0.6 * Math.min(1, ev.strength)));
+    this.stats.events++;
+    for (let j = 0; j < n; j++) {
+      // prefer tiles lit by this voice right now (they are what the ripple carries outward)
+      let i = list[(rand() * list.length) | 0], st = field.tileState(i, histAt, ev.time, aff, 60, -1e9);
+      for (let t = 0; t < 4 && st.act < 0.2; t++) { i = list[(rand() * list.length) | 0]; st = field.tileState(i, histAt, ev.time, aff, 60, -1e9); }
+      const birth = ev.time + delayOf(i);
+      this.emit(L.x[i], field.tileState(i, histAt, birth, aff, 60, -1e9).height, L.z[i], ev.voice, birth, rand);
+    }
+    return n;
+  }
+
+  // Continuous emission: particles/s × the voice's level, seeded by the update index.
+  continuous(field, aff, levels, time, dt, stepIndex, delayOf) {
+    const S = P.sparks;
+    if (!S.on || S.continuous <= 0 || !field.layout) return;
+    const L = field.layout, rand = mulberry32((stepIndex * 2654435761) ^ this.seed);
     for (const k of EMITTERS[S.from] || EMITTERS.highs) {
-      const list = L.byVoice[k];
-      if (!list.length) continue;
-      // Burst: a tile whose (delayed) onset is flashing throws sparks.
-      if (S.burst > 0) {
-        for (let s = 0; s < SAMPLES; s++) {
-          const i = list[(r() * list.length) | 0];
-          const a = field.tileState(i, histAt, time, aff);
-          if (a.onset > 0.55 && r() < S.burst) {
-            const n = 1 + ((r() * 3) | 0);
-            for (let j = 0; j < n; j++) this.emit(L.x[i], a.height, L.z[i], k, time);
-          }
-        }
-      }
-      // Shimmer: steady emission proportional to the voice's level.
-      if (S.shimmer > 0) {
-        this.steady[k] += S.shimmer * bands.level[k] * dt;
-        let guard = 0;
-        while (this.steady[k] >= 1 && guard++ < 64) {
-          const i = list[(r() * list.length) | 0];
-          const a = field.tileState(i, histAt, time, aff);
-          if (a.act > 0.3) { this.emit(L.x[i], a.height, L.z[i], k, time); this.steady[k] -= 1; }
-          else if (guard > 16) break;
-        }
-        this.steady[k] = Math.min(this.steady[k], 8);
+      const list = L.byVoice[k]; if (!list.length) continue;
+      this.steady[k] = Math.min(this.steady[k] + S.continuous * P.macros.sparks * levels[k] * dt, 16);
+      while (this.steady[k] >= 1) {
+        const i = list[(rand() * list.length) | 0], st = field.tileState(i, histAt, time, aff, 60, -1e9);
+        this.emit(L.x[i], st.height, L.z[i], k, time + delayOf(i), rand);
+        this.steady[k] -= 1;
       }
     }
   }
@@ -142,27 +155,26 @@ export class Sparks {
     this.lo = Infinity; this.hi = -1;
   }
 
-  // Reproducible emission: the same seed and the same music give the same sparks.
-  reseed(seed) { this.rand = mulberry32((seed * 2654435761) >>> 0); }
-
   clear() {
-    for (let i = 0; i < CAPACITY; i++) this.start.array[i * 4 + 3] = -1e6;
-    this.start.clearUpdateRanges(); this.start.needsUpdate = true;
-    this.steady.fill(0); this.lo = Infinity; this.hi = -1;
+    this.start.array.fill(-1e6); this.start.clearUpdateRanges(); this.start.needsUpdate = true;
+    this.steady.fill(0); this.lo = Infinity; this.hi = -1; this.cursor = 0;
+    this.stats = { events: 0, emitted: 0, dropped: 0, alive: 0 };
   }
 
   sync(look, time, pixel) {
     const u = this.uniforms, S = P.sparks;
-    u.uTime.value = time; u.uGravity.value = S.gravity; u.uTurb.value = S.turbulence;
+    this.now = time;
+    u.uTime.value = time; u.uGravity.value = S.gravity; u.uTurb.value = S.turbulence; u.uTurbScale.value = S.turbScale;
     u.uSize.value = S.size; u.uPixel.value = pixel; u.uBright.value = S.bright; u.uCore.value = look.sparkCore;
     for (let k = 0; k < NB; k++) u.uPalette.value[k].copy(look['v' + k]);
-    this.points.visible = S.on && P.diag.view !== 'surface';
+    const solo = P.solo.dest;
+    this.points.visible = S.on && P.diag.view !== 'surface' && (solo === 'none' || solo === 'sparks');
     this.flush();
   }
 
   countAlive(time) {
     let n = 0; const s = this.start.array, v = this.vel.array;
     for (let i = 0; i < CAPACITY; i++) { const age = time - s[i * 4 + 3]; if (age >= 0 && age <= v[i * 4 + 3]) n++; }
-    return (this.alive = n);
+    return (this.stats.alive = n);
   }
 }

@@ -10,16 +10,18 @@
 //    1  study-01/0.1.0  original Study 01
 //    2  precision pass, checkpoint 1: schema field, transient groups split out
 //    3  checkpoint 2: looks carry separate light terms (old looks converted term for term)
+//    4  checkpoints 3–4: groups named for what the artist changes (floor, movement, music,
+//       map, pointer, sparks, macros); timing shown as time-to-90 % in ms
 //  Later checkpoints append steps here.
 // ─────────────────────────────────────────────────────────────────────────────
 import { P, VERSION } from './params.js';
 import { isLegacy, fromLegacy } from './looks.js';
 
-export const SCHEMA = 3;
+export const SCHEMA = 4;
 
 // Groups of P written into a scene. Everything else in P is transient.
 export const SAVED_GROUPS = () => Object.keys(P).filter(k => !TRANSIENT.includes(k) && k !== 'looks');
-export const TRANSIENT = ['diag', 'manual'];
+export const TRANSIENT = ['diag', 'manual', 'solo', 'inspect'];
 
 const STEPS = {
   // 1 → 2: nothing renamed yet; mark the schema and drop any transient state that slipped in.
@@ -27,6 +29,29 @@ const STEPS = {
   2: s => {
     if (s.looks) for (const k of ['lookA', 'lookB']) if (isLegacy(s.looks[k])) s.looks[k] = fromLegacy(s.looks[k]);
     s.schema = 3; return s;
+  },
+  3: s => {
+    const sp = s.spawn || {}, ini = s.init || {}, up = s.update || {}, vo = s.voices || {}, af = s.affector || {}, sk = s.sparks || {};
+    const T90 = Math.log2(10) * 1000;                       // half-life (s) → time to 90 % (ms)
+    const atk = vo.attack ?? 0.012, lo = vo.releaseLow ?? 0.24, hi = vo.releaseHigh ?? 0.06, pv = up.pulseVoice ?? 1;
+    s.floor = { rings: sp.rings, pattern: sp.pattern, ringWidth: sp.ringWidth, order: sp.order, scatter: sp.scatter,
+      active: sp.density, seed: sp.seed, variation: ini.spread, gap: ini.gap, rest: ini.base, jitter: ini.jitter };
+    s.movement = { lift: up.extrude, curve: up.shape, floor: up.floor, ceil: up.ceil,
+      ripple: up.travel === 0 ? 'instant' : 'outward', travel: up.travel > 0 ? up.travel : undefined, swell: up.swell };
+    s.map = {
+      lift: { rise: atk * T90, fall: lo * T90, fallHigh: hi * T90 },
+      rim: { source: pv, rise: atk * T90, fall: lo * Math.pow(hi / lo, pv / 7) * T90 },
+    };
+    // The old detector (rise > onset × recent average rise) and the new one (novelty peak over
+    // median + k·MAD) are not equivalent; the old default 1.8 maps to the new default 5, and a
+    // lower old multiple (easier triggering) to a higher sensitivity. Approximate by design.
+    if (Number.isFinite(vo.onset)) s.music = { hitSensitivity: Math.max(0, Math.min(10, 5 + (1.8 - vo.onset) * 5)) };
+    s.pointer = af;
+    s.sparks = { on: sk.on, from: sk.from, speed: sk.speed, life: sk.life, gravity: sk.gravity, turbulence: sk.turbulence,
+      size: sk.size, bright: sk.bright, continuous: sk.shimmer,
+      perHit: Number.isFinite(sk.burst) ? Math.round(10 + sk.burst * 60) : undefined };
+    for (const k of ['spawn', 'init', 'update', 'voices', 'affector']) delete s[k];
+    s.schema = 4; return s;
   },
 };
 
@@ -61,10 +86,14 @@ export function assignGroup(target, src) {
 // Keep relationships valid after any change (UI, import, migration).
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const RULES = [
-  P => { P.spawn.rings = clamp(Math.round(P.spawn.rings), 6, 96); },
-  P => { P.update.floor = clamp(P.update.floor, 0, 0.95); P.update.ceil = clamp(Math.max(P.update.ceil, P.update.floor + 0.02), 0.02, 1); },
-  P => { P.update.travel = Math.max(0, P.update.travel); },
-  P => { P.sparks.life = clamp(P.sparks.life, 0.05, 10); P.sparks.size = Math.max(0.01, P.sparks.size); },
+  P => { P.floor.rings = clamp(Math.round(P.floor.rings), 6, 96); P.floor.active = clamp(P.floor.active, 0, 1); },
+  P => { const M = P.movement; M.floor = clamp(M.floor, 0, 0.95); M.ceil = clamp(Math.max(M.ceil, M.floor + 0.02), 0.02, 1);
+         M.travel = clamp(M.travel, 1, 200); M.lift = clamp(M.lift, 0, 20); },
+  P => { const m = P.music; m.noiseFloor = clamp(m.noiseFloor, -120, -10); m.reference = clamp(Math.max(m.reference, m.noiseFloor + 6), -60, 20);
+         m.hitSensitivity = clamp(m.hitSensitivity, 0, 10); m.cooldownLow = clamp(m.cooldownLow, 10, 1000); m.cooldownHigh = clamp(m.cooldownHigh, 10, 1000); },
+  P => { for (const d of Object.values(P.map)) for (const k of ['rise', 'hold', 'fall', 'fallHigh']) if (k in d) d[k] = clamp(d[k], 0, 20000); },
+  P => { const S = P.sparks; S.life = clamp(S.life, 0.05, 10); S.size = Math.max(0.01, S.size); S.perHit = clamp(Math.round(S.perHit), 0, 400); S.cone = clamp(S.cone, 0, 90); },
+  P => { for (const k of Object.keys(P.macros)) P.macros[k] = clamp(P.macros[k], 0, 3); },
 ];
 export function validate() { for (const r of RULES) r(P); }
 

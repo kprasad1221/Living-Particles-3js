@@ -12,8 +12,7 @@
 {
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/",
-    "tweakpane": "https://cdn.jsdelivr.net/npm/tweakpane@4.0.5/dist/tweakpane.min.js"
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
   }
 }
 </script>
@@ -27,7 +26,7 @@
     <p class="micro">Pixel Rhythms Labs</p>
     <h1>Living Particles</h1>
     <p class="sub">Study 01 · Hex Field</p>
-    <p class="now" id="nowPlaying">Test signal · eight voices in polyrhythm</p>
+    <p class="now" id="nowPlaying">Test pattern</p>
   </header>
 
   <nav class="toggles" aria-label="Panels">
@@ -39,10 +38,11 @@
   <aside class="drawer library" id="library" aria-label="Music">
     <div class="drawer-head"><h2>Music</h2><span class="hint">Daydream sketches, stems, anything</span></div>
 
-    <div class="seg" role="group" aria-label="Source">
-      <button type="button" data-source="test" aria-pressed="true">Test signal</button>
-      <button type="button" data-source="track" aria-pressed="false" disabled>Track</button>
-      <button type="button" data-source="mic" aria-pressed="false">Mic</button>
+    <div class="seg seg4" role="group" aria-label="Source">
+      <button type="button" data-source="pattern" aria-pressed="true" title="Built-in test pattern, rendered as audio (precise analysis)">Pattern</button>
+      <button type="button" data-source="track" aria-pressed="false" disabled title="The selected track (precise analysis)">Track</button>
+      <button type="button" data-source="mic" aria-pressed="false" title="Microphone (Live · basic analysis)">Mic</button>
+      <button type="button" data-source="stress" aria-pressed="false" title="The original synthetic spectrum: a visual stress test, silent">Stress</button>
     </div>
 
     <label class="drop" id="drop" for="fileInput">
@@ -72,9 +72,11 @@
 
   <div class="pane-wrap" id="paneWrap"><div id="pane"></div></div>
 
-  <section class="voices" aria-label="Voices">
-    <canvas id="meters" width="760" height="112" aria-label="Eight voices: recent history and current level"></canvas>
+  <section class="voices" aria-label="Voices and the inspected mapping">
+    <canvas id="meters" width="900" height="150" aria-label="Voice history, fine spectrum and the inspected mapping's meters"></canvas>
   </section>
+
+  <div class="strip" id="strip" role="group" aria-label="Performance"></div>
 
   <div class="cams" role="group" aria-label="Camera">
     <button type="button" class="chip" data-cam="stand" aria-pressed="true">Stand <kbd>1</kbd></button>

@@ -144,7 +144,7 @@ export class Stage {
     this.sky.position.copy(this.camera.position);
 
     // Affector: follow the pointer while it moves; fade out after 2.5 s of stillness.
-    const A = P.affector, a = this.affector;
+    const A = P.pointer, a = this.affector;
     let want = 0;
     if (A.on && A.mode === 'orbit') {
       const s = time * A.speed;
@@ -161,7 +161,7 @@ export class Stage {
     s.uTop.value.copy(look.skyTop); s.uHorizon.value.copy(look.horizon); s.uGlow.value = look.horizonGlow;
     this.sky.visible = view !== 'emission';
     this.look = look;
-    this.bloom.strength = look.bloom; this.bloom.radius = look.bloomRadius; this.bloom.threshold = look.bloomThreshold;
+    this.bloom.strength = look.bloom * P.macros.glow; this.bloom.radius = look.bloomRadius; this.bloom.threshold = look.bloomThreshold;
     const tm = { aces: THREE.ACESFilmicToneMapping, agx: THREE.AgXToneMapping, neutral: THREE.NeutralToneMapping, none: THREE.NoToneMapping };
     this.renderer.toneMapping = tm[P.render.toneMapping] ?? THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = look.exposure;
@@ -171,7 +171,7 @@ export class Stage {
     const r = this.renderer, view = P.diag.view, look = this.look;
     r.setRenderTarget(this.mainRT); r.clear(); r.render(this.scene, this.camera);
 
-    const glow = look && look.bloom > 0 && (view === 'normal' || view === 'bloom');
+    const glow = look && look.bloom * P.macros.glow > 0 && (view === 'normal' || view === 'bloom');
     if (glow) {
       if (look.bloomSky < 1) {
         const skyWas = this.sky.visible;

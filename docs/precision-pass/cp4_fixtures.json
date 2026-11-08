@@ -1,0 +1,121 @@
+{
+  "config": {
+    "bandWin": 4096,
+    "bandHop": 512,
+    "fastWin": 1024,
+    "fastHop": 256,
+    "nBands": 32,
+    "fMin": 30,
+    "fMax": 16000,
+    "compression": 1000,
+    "noveltyFloorDb": -80
+  },
+  "bias": {
+    "band": 0.025,
+    "fast": 0.0041,
+    "live": 0
+  },
+  "music": {
+    "normalize": "preserve",
+    "gain": 0,
+    "noiseFloor": -60,
+    "gateHyst": 6,
+    "gateOpen": 10,
+    "gateClose": 150,
+    "reference": -6,
+    "tilt": 2.5,
+    "curve": 1.6,
+    "adapt": 0.5,
+    "hitSensitivity": 5,
+    "cooldownLow": 80,
+    "cooldownHigh": 40,
+    "syncOffset": 0
+  },
+  "results": {
+    "silence_then_below_gate": {
+      "events": 0,
+      "maxNormalisedLevel": 0,
+      "pass": true
+    },
+    "sustained_sine_preserve": {
+      "meanLevel": 0.6398,
+      "driftPct": 0,
+      "pass": true
+    },
+    "sustained_sine_adaptive": {
+      "meanLevel": 0.712,
+      "driftPct": 11.04,
+      "note": "adaptive moves the reference by design (bounded ±12 dB × adapt)"
+    },
+    "six_dB_step": {
+      "rawDiffDb": 6,
+      "normalisedBefore": 0.496,
+      "normalisedAfter": 0.64,
+      "pass": true
+    },
+    "sweep_band_handoff": {
+      "worstSummedErrorDb": 0.005,
+      "worstFrameJumpDb": 0.001,
+      "pass": true
+    },
+    "isolated_bursts": {
+      "bursts": 20,
+      "detected": 20,
+      "missed": 0,
+      "duplicates": 0,
+      "falseEventsAwayFromBursts": 0,
+      "spillHitsInOtherVoices": 39,
+      "medianAbsErrorMs": 1.65,
+      "p95AbsErrorMs": 4.75,
+      "meanSignedErrorMs": -0.49,
+      "rawBiasMs": {
+        "band": -25.01,
+        "fast": -4.08
+      },
+      "lookaheadMs": {
+        "band": 10.67,
+        "fast": 5.33
+      },
+      "pass": true
+    },
+    "isolated_bursts_holdout": {
+      "sampleRate": 44100,
+      "bursts": 16,
+      "missed": 0,
+      "duplicates": 0,
+      "medianAbsErrorMs": 1.9,
+      "p95AbsErrorMs": 3.62,
+      "meanSignedErrorMs": 0.3,
+      "pass": true
+    },
+    "rapid_high_125ms": {
+      "expected": 24,
+      "detectedInBrilliance": 24,
+      "pass": true
+    },
+    "rapid_high_62.5ms": {
+      "expected": 48,
+      "detectedInBrilliance": 48,
+      "pass": true
+    },
+    "phase_opposed_stereo": {
+      "globalDb": -20,
+      "pass": true
+    },
+    "sample_rates": {
+      "44100": {
+        "loudestVoice": "mid",
+        "upperMidDb": -136.886,
+        "midDb": -20,
+        "globalDb": -20
+      },
+      "48000": {
+        "loudestVoice": "mid",
+        "upperMidDb": -111.74,
+        "midDb": -20,
+        "globalDb": -20
+      },
+      "pass": true
+    }
+  }
+}

@@ -3,7 +3,6 @@
   "private": true,
   "description": "Local copies of the import-map libraries so the headless checks run offline.",
   "dependencies": {
-    "three": "0.186.0",
-    "tweakpane": "4.0.5"
+    "three": "0.186.0"
   }
 }
