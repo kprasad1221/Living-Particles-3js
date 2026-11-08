@@ -2,7 +2,9 @@
 
 Particle studies for the browser, translated from Unity VFX Graph and TouchDesigner.
 
-**Study 01 · Hex Field** rebuilds a Unity test from a few years ago: a floor of hex particles from SineVFX's [Living Particles](https://assetstore.unity.com/packages/vfx/particles/spells/living-particles-105817) pack, driven by an FFT script so each part of the floor answers its own frequency band (inspired by *Tetris Effect*). Here it is one instanced draw call of about 7,400 hex prisms, a second spark system with real lifetimes, two editable looks you can morph between, and a music library for bringing in Daydream sketches and stems.
+**Study 01 · Hex Field** rebuilds a Unity test from a few years ago: a floor of hex particles from SineVFX's [Living Particles](https://assetstore.unity.com/packages/vfx/particles/spells/living-particles-105817) pack, driven by an FFT script so each part of the floor answers its own frequency band (inspired by *Tetris Effect*). It is one instanced draw call of about 7,400 hex prisms, a spark system and a plume gesture with real lifetimes, two editable looks you can mix, and a music library for bringing in Daydream sketches and stems.
+
+**v0.2 · Precision pass** (branch `study-01-precision-pass`) follows the [development spec](https://app.notion.com/p/4121f16ba96281ff9f04f57fd9f2b046): separately controlled light terms, an editor grouped by what you change, analysis of decoded tracks ahead of playback with timestamped hits, finite particle budgets, a composed Plume phrase, and an experimental harmony → shimmer response.
 
 ![AV2 · Tropical, standing view](docs/study-01/01_av2_tropical_stand.jpg)
 
@@ -12,120 +14,104 @@ Particle studies for the browser, translated from Unity VFX Graph and TouchDesig
 
 ## Run it
 
-ES modules and the microphone need a local server:
+ES modules, the analysis worker and the microphone need a local server:
 
 ```
 npx http-server . -c-1
 ```
 
-Then open http://127.0.0.1:8080. Use the same address every time: the music library lives in that origin's browser storage.
+On Windows PowerShell use `npx.cmd http-server . -c-1`. Then open http://127.0.0.1:8080. Use the same address every time: the music library lives in that address's browser storage.
 
-No build step. three.js 0.186.0 and Tweakpane 4.0.5 load from jsDelivr through the import map in `index.html`, the same versions as Audio Geology 3JS.
+No build step. three.js 0.186.0 loads from jsDelivr through the import map in `index.html`.
 
 ## Using it
 
-- **Music** (L): Test signal, Track, or Mic. Drop audio files anywhere on the page or click the drop zone. Tracks stay in this browser (IndexedDB) until you remove them; nothing is uploaded. **Save scene to this track** stores every control, both looks and the camera with that track's name; with **Recall** on, the scene comes back when the track starts.
-- **Controls** (P): folders follow VFX Graph's contexts (see below). Look A and Look B are each fully editable in their own tab; **morph** mixes them, by hand, with a 16 s LFO, or following one voice's level.
-- **Floor**: move the pointer over it. That is the affector (the hands in the Unity capture).
-- **Camera**: drag to orbit, scroll to zoom. **1** Stand (eye height, looking out), **2** Survey (from above, where the rings read as a mandala), **3** Low.
-- **Space** play/pause · **R** restart · **H** perform mode (hides the interface).
-- The working scene autosaves to this browser. **Camera · render · scenes** has Export / Import JSON and Reset.
+- **Music** (L): Pattern (built-in test music), Track, Mic, or Stress (the old synthetic spectrum, visual only). Drop audio anywhere on the page. Tracks stay in this browser (IndexedDB) and are never uploaded. A track is analysed in a worker when it is first played; the status line says *precise* when that is done (*basic* until then).
+- **Performance strip** (top): transport, A / Mix / B preview and the mix fader, and four scoped macros: Movement (× lift only), Sparks (× particles only), Glow (× bloom only), and the sensitivity of the mapping you are inspecting.
+- **Editor** (P): Looks · A / B, Light, Floor, Movement, Sparks, Plume, Music response, Interaction and camera, Scenes and performance. Every number can be typed, nudged with the arrow keys, and reset (double-click a label). A greyed control says why it has no effect right now.
+- **Music response**: inspect one mapping at a time. The meters under the floor show it as *measured* (dB) → *processed* (after gate and normalisation) → *output* (what the floor gets). **Solo response** shows only that destination; **Manual test** injects a level, a hit, or full harmony confidence after the detector.
+- **Floor**: move the pointer over it (the hands in the Unity capture).
+- **Camera**: drag to orbit, scroll to zoom. **1** Stand · **2** Survey · **3** Low.
+- **Space** play/pause · **R** restart · **H** perform mode.
+- **Scenes**: *Save scene to this track* stores every control, both looks and the camera with that track; with *Recall* on it comes back when the track starts. Export / Import JSON, Restore last saved, Reset. *Load the Plume phrase scene* is a composed starting point.
+
+## What v0.2 changed
+
+| Area | Now |
+|---|---|
+| Light | Each contribution is its own control: resting rim, rim breath, rim response, inner spill, interior fill, side glow and falloff, top line, corner lines, hit accent (coloured), hit whitening (white), spark white core. Bloom is fed by an emission-only render with real occlusion, so the sky does not glow unless you ask (`bloomSky`). Distant rims fade by coverage instead of merging into a sheet. Diagnostic views: no glow, glow only, emission only, surfaces only. |
+| Looks | The four originals are kept as authored. **AV2 · Precision** was tuned with bloom off first: coloured rims, dark interiors, no white flash, glow 0.2 / spread 0.25 / cutoff 1.1. |
+| A / B | Preview A, Mix, Preview B is separate from which look you edit, so editing B at mix 0 is never invisible. |
+| Audio | Tracks and the pattern are analysed from decoded PCM ahead of playback (below). Musical time comes from the audio clock, unwrapped across loops; the same audio time gives the same rows, hits and spark births at any frame rate. |
+| Hits | Events with an id, time and strength. One hit = one finite spark budget, with births scheduled along the ripple. Overflow is counted, not hidden. |
+| Plume | One authored gesture per hit on a chosen voice: emerge, rise, curl, disperse, rest (0–80 / 80–250 / 250–900 / 900–1600 ms at length 1.6 s), at most N at once. |
+| Harmony | Experimental: a held fifth between two detected notes makes the rims twinkle. Off by default. |
+| Scenes | Schema 6. Study 01 saves (schema 1) migrate step by step; nothing is discarded. Imports are validated (finite numbers, valid ranges, floor < ceiling). |
+
+## Audio analysis
+
+Measurement, interpretation and mapping are kept apart: tuning a visual never changes a measured value or a hit's time.
+
+| Path | Window / hop | At 48 kHz | Used for |
+|---|---|---|---|
+| Band | 4096 / 512 | 85.3 ms window, 10.7 ms hop, 11.7 Hz bins | 32 log bands (30 Hz – 16 kHz), 8 voices, global level, novelty of the 4 low voices |
+| Fast | 1024 / 256 | 21.3 ms, 5.33 ms, 46.9 Hz | novelty of the 4 high voices |
+| Harmonic | 8192 / 1024 | 170.7 ms, 21.3 ms, 5.86 Hz | peaks, notes, chroma (experiment) |
+| Live (mic) | AnalyserNode | one snapshot per 60 Hz update | labelled *Live · basic analysis*; no harmonic path |
+
+- **Window and timing**: periodic Hann; frame *i* is centred on sample *i*·hop ("window-centre"). Sample rate is read at runtime; 44.1 and 48 kHz are both tested.
+- **Power**: P = 2|X|² / (N·Σw²), so a band's sum is its mean-square value; dB are relative to a full-scale sine. Stereo = mean of the channels' powers (phase-opposed channels do not cancel).
+- **Interpretation**: input gain and a tilt (+2.5 dB/octave above 500 Hz) → noise gate with hysteresis (opens 6 dB above the floor) and soft open/close → *Preserve dynamics* (fixed reference, default) or *Adaptive* (bounded ±12 dB) → transfer curve to 0–1.
+- **Hits**: novelty = positive change of log-compressed amplitude per bin, summed per voice, before any visual grouping. A hit is a local peak above the rolling median + k·MAD of the last 0.5 s (sensitivity 0–10 sets k) and an absolute minimum, with re-arm times of 80 ms (low voices) and 40 ms (high). One hop of look-ahead; event times are corrected by the measured path bias.
+- **Timing convention**: every rise and fall in the interface is *time to 90 %* (rise) or *time to decay by 90 %* (fall), in ms. One-pole: `c = 1 − exp(−ln 10 · dt / t90)`. Study 01's half-lives were converted (× 3.32), not relabelled.
+
+### Harmony → Shimmer (experimental)
+
+1. Peaks of the harmonic-path spectrum, refined by parabolic interpolation on dB.
+2. Notes by harmonic summation: each peak in 55–1760 Hz is a candidate fundamental; the strongest takes the peaks at 1…8 × f (±35 cents) and they are used up, so one note's overtones (2f and 3f are themselves a fifth apart) do not become a second note. Up to 4 notes. The fundamental must be present.
+3. Fifth score: the best pair within ± tolerance (25 cents) of 701 ± 1 cents, folded to one octave, shaped 1 − (dev/tol)⁴, × the weaker note's relative strength. Fourths do not count.
+4. Confidence: *confident above* 0.5 for *must hold* 200 ms switches it on; below *let go* 0.3 for longer than *bridge gaps* 250 ms switches it off; then rise 100 ms / release 400 ms.
+
+It is a heuristic, not a probability, and not chord recognition. Dense mixes, missing fundamentals and inharmonic sounds will confuse it.
 
 ## How it's built: Unity ↔ TouchDesigner ↔ here
 
 | Idea | Unity (VFX Graph / Shuriken) | TouchDesigner | Here |
 |---|---|---|---|
-| Audio in | `AudioSource` + `GetSpectrumData` | Audio File In / Device In → Audio Spectrum CHOP | Web Audio `AnalyserNode`, 1024 and 4096 points (`src/audio.js`) |
-| Bins → 8 bands | `AudioBands.cs`, 512 → 8 widening windows | Audio Spectrum → Resample / Analyze CHOP | `cookBands()`: band = mean of bins between edges (`src/bands.js`) |
-| Smoothing | attack/release `Lerp` | Lag / Filter CHOP | envelope half-lives, per band |
-| Normalising | running peak (only grows) | Limit / Math CHOP range | slow peak **and** floor per band, so quiet hats and loud kicks both use 0..1 |
-| Hits | — | Trigger CHOP | onset pulse when the rise beats 1.8× the recent average |
-| Memory | (would need a custom buffer) | Trail CHOP / Cache TOP | 8 × 512 float texture, newest row first: 8.5 s at 60 Hz |
-| Exposed properties | Blackboard, *Exposed*, `SetFloat` | custom parameters | `P` in `src/params.js` → shader uniforms |
-| Per-particle attributes | attributes written in Initialize | point attributes | `InstancedBufferAttribute`s `aTile`, `aSeed` |
-| **Spawn** (capacity, arrangement) | Spawn context, capacity | Grid SOP / Copy SOP | `buildLayout()`: axial hex grid cut to a disc |
-| **Initialize** | Initialize Particle | Point SOP | threshold, voice, seed per tile, written once |
-| **Update**, stateless | Update Particle blocks | CHOP → instancing | vertex shader: reads history at the tile's delay → height, glow, flash |
-| **Update**, stateful | Update with stored attributes | Feedback TOP on a position texture | not yet. Sparks evaluate motion in closed form from age instead |
-| GPU events | GPU Event → spawn | Trigger → Particle SOP birth | onset flash on a tile → spark burst (`src/world/sparks.js`) |
-| **Output** | Output Particle Mesh + Shader Graph | MAT + Render TOP | `ShaderMaterial` (rim, fill, sides, grain, fog); additive point sprites |
-| Affector | Living Particles affector object | distance in a Point SOP / GLSL | pointer → ray → floor plane → `uAff` uniform |
-| Bloom, tone map | post-processing volume | Bloom TOP, Level TOP | `UnrealBloomPass` → `OutputPass` (Neutral, ACES, AgX) |
-
-The floor keeps no per-tile state between frames: everything a tile "remembers" comes from the shared history texture. That is why ten thousand tiles cost almost nothing to update, and why the next study that needs real per-particle motion (plumes, flocking, the Tetris Effect dust) will move to GPGPU ping-pong textures.
-
-## Signal → Voices → Floor
-
-```
-SIGNAL   source → 1024-pt FFT (high voices) + 4096-pt FFT (low voices)
-VOICES   8 bands → adaptive range → envelope → onset · 60 Hz fixed clock
-MEMORY   one row per step into an 8 × 512 texture (row 0 = now)
-FLOOR    tile at distance d reads the row d / travel seconds old → rings travel outward
-SPARKS   tiles whose delayed onset is flashing throw sparks; motion = p0 + v·age + ½g·age² + turbulence
-LOOK     mix(Look A, Look B, morph) → rim · fill · sides · sky · fog · bloom
-```
-
-### Voices
-
-Same bands and analysis as Audio Geology 3JS 02.2, so a track reads the same in both studies.
-
-| Voice | Hz | FFT | Release half-life |
-|---|---|---|---|
-| sub | 30–60 | 4096 | 0.24 s |
-| bass | 60–150 | 4096 | 0.20 s |
-| low mid | 150–400 | 4096 | 0.16 s |
-| mid | 400–1k | 4096 | 0.13 s |
-| upper mid | 1–2.5k | 1024 | 0.11 s |
-| presence | 2.5–5k | 1024 | 0.09 s |
-| brilliance | 5–10k | 1024 | 0.07 s |
-| air | 10–16k | 1024 | 0.06 s |
-
-Attack half-life 12 ms for all. Range: peak falls with a 3 s half-life, floor rises with 8 s; `norm = ((raw − floor) / max(peak − floor, 0.04))^1.35`.
-
-### Exact mappings (per tile, in the vertex shader)
-
-| Stage | Mapping |
-|---|---|
-| Delay | `row = d / travel × 60` (two rows interpolated) |
-| Presence | `smoothstep(floor 0.22, ceil 0.92, level)` |
-| Threshold spread | `thr = seed × spread × 0.9`; `act = smoothstep(thr, thr + mix(1, 0.12, spread), presence) × live` |
-| Density | a tile is *live* with probability `density`; dead tiles stay pure grid |
-| Height | `base + jitter × seed + extrude × act^shape + swell × sub × fold(x, z, t) + affector × lift` |
-| Rim | `rimGlow × (0.55 + 0.45 × rimPulse × pulseVoice) + 0.45 × act × fillGlow + onset × flash` |
-| Fill | voice colour × act × fillGlow, from the rim inward (`fill: edge → solid` makes it solid) |
-| Sides | voice colour × act × sideGlow × `y^mix(9, 2.6, act)`, plus a lit top line and optional corner lines |
-| Affector | `on × (1 − smoothstep(0, radius, distance))²` → lift, glow floor, tint |
-| Fog | by ground distance from the viewer, starting 24 units out: `1 − exp(−((dist − 24) × fog)^1.5)` |
-
-### Looks
-
-| Look | From |
-|---|---|
-| AV1 · Violet | Unity capture, AudioVisualizer object AV1: magenta/purple rims, outline-only |
-| AV2 · Tropical | AV2: red rim floor; blue, cyan, yellow and orange columns |
-| AV3 · Funk | AV3: warm-white rims on dark stone, solid red columns with lit edges |
-| Nocturne | new: a night version leaning toward *Tetris Effect*'s dark stages |
-
-The AV looks keep the pale Unity daylight sky from the capture. Emission is HDR (lit rims run at roughly 1.5–2.5 before tone mapping) and bloom thresholds sit near 0.85, so the sky does not bloom and only the light does.
+| Spectrum | `GetSpectrumData` | Audio Spectrum CHOP | STFT of decoded PCM in a worker (`src/analysis/`); AnalyserNode for live input |
+| Bins → bands | `AudioBands.cs`, 512 → 8 | Resample / Analyze CHOP | fractional bin weights per band, integrated power |
+| Smoothing | attack/release `Lerp` | Lag / Filter CHOP | per-destination envelopes, time-to-90 % (`src/response.js`) |
+| Hits | — | Trigger CHOP | spectral novelty + median/MAD threshold + re-arm |
+| Memory | (custom buffer) | Trail CHOP / Cache TOP | 9 × 512 history texture (8 voices + global), newest row first |
+| Exposed properties | Blackboard, `SetFloat` | custom parameters | `P` (`src/params.js`) → uniforms |
+| Per-particle attributes | Initialize attributes | point attributes | instanced attributes `aTile`, `aSeed` |
+| Spawn | Spawn context, capacity | Grid / Copy SOP | hex layout cut to a disc |
+| Update, stateless | Update blocks | CHOP → instancing | vertex shader reads history at the tile's ripple delay |
+| Update, stateful | stored attributes | Feedback TOP on a position texture | not yet; sparks and plumes are closed-form in age |
+| GPU events | GPU Event → spawn | Trigger → Particle SOP | hit event → finite budget, scheduled births |
+| Output | Output Mesh + Shader Graph | MAT + Render TOP | `ShaderMaterial` with separate light terms; point sprites |
+| Affector | Living Particles affector | distance in GLSL | pointer → floor plane → uniform |
+| Bloom, tone map | post-processing volume | Bloom TOP, Level TOP | emission-only render → UnrealBloomPass → OutputPass |
 
 ## Checks
 
-`tools/` holds headless checks (Python + Playwright, software WebGL, a fake clock), adapted from Audio Geology 3JS:
+`tools/` holds the evidence. Waveform fixtures run in Node through the real analysis code; the rest drive the page headlessly (Playwright, software WebGL, fake display clock, virtual audio clock).
 
 ```
 cd tools
-npm install                        # local three / tweakpane for the import map
-python capture.py check            # timing invariance, onsets, counts, scene round trip, rebuild
-python capture.py                  # fixed-excerpt captures of each look
+npm install
+node fixtures.mjs                  # §8.1 waveform fixtures → captures/fixtures.json
+python capture.py check            # §8.2 integration checks → captures/check.json
+python capture.py phrase           # matched rest / attack / crest / release on a composed excerpt
+python capture.py harmony          # harmony → shimmer off / on, and its meters
+python capture.py diag av2p        # composite / no glow / glow only / emission / surfaces
+python capture.py motion av2 av2p  # orbiting-camera clips side by side
 python capture.py ui               # interface at 1440, 820 and 390 px
 ```
 
-Every capture: Restart, 300 steps (5 s) of the built-in polyrhythm test signal, then render with the world paused. SwiftShader frame times say nothing about a real GPU.
+Results at the end of the pass are in `docs/precision-pass/` (per checkpoint). In short: 16 of 16 waveform fixtures and all integration checks pass; worst single-tone error 0.43 cents; isolated-hit timestamps within 1.65 ms median / 4.75 ms 95th percentile of the attack; the same audio time gives identical history, event ids and spark births at 30, 60 and 120 Hz display rates.
 
-## Built with
-
-- [three.js](https://threejs.org) 0.186.0
-- [Tweakpane](https://tweakpane.github.io/docs/) 4.0.5
+Not measured here: frame rate on a real GPU (these runs are software-rendered), and the look on real music. `phrase_excerpt.py` is synthetic music with known moments; judging the refined looks on a Daydream track is still to do.
 
 ## License
 
