@@ -2,6 +2,7 @@
 //   node tools/fixtures.mjs            → prints a summary and writes tools/captures/fixtures.json
 // No browser needed: src/analysis/*.js are plain modules.
 import { analyzePCM, detectEvents, Interpreter, BIAS, CONFIG } from '../src/analysis/features.js';
+import { harmonyTrack, trackOpts, HARMONY } from '../src/analysis/harmony.js';
 import { P, NB, VOICE_NAMES } from '../src/params.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -170,6 +171,83 @@ for (const spacing of [0.125, 0.0625]) {
   results.sample_rates = { ...out, pass: Math.abs(out[44100].globalDb - out[48000].globalDb) < 0.2 };
 }
 
+// ── Harmonic experiment (spec §6, §8.1) ─────────────────────────────────────
+// Defaults of P.harmony; cents error measured on the strongest detected note.
+const H = trackOpts(P.harmony);
+const centsOf = (a, b) => 1200 * Math.log2(b / a);
+function tones(sr, secs, parts, from = 0) {
+  const x = new Float32Array(sr * secs), s0 = Math.round(from * sr);
+  for (const [f, a] of parts) for (let i = s0; i < x.length; i++) x[i] += a * Math.sin(2 * Math.PI * f * i / sr) * Math.min(1, (i - s0) / (0.01 * sr));
+  return x;
+}
+function harmonyRun(x, sr) {
+  const f = analyzePCM([x], sr), h = f.harmony, tr = harmonyTrack(h, H), M = h.maxNotes;
+  const at = t => { const i = Math.min(h.frames - 1, Math.round(t / h.hop)); return { i, notes: Array.from(h.notesF.subarray(i * M, i * M + h.nNotes[i])), raw: tr.raw[i], conf: tr.conf[i], state: tr.state[i] }; };
+  return { f, h, tr, at };
+}
+// 10 · Single tones: sample-rate mapping and peak interpolation (< 15 cents)
+{
+  const out = {}; let worst = 0;
+  for (const sr of [44100, 48000]) for (const hz of [220, 440, 880]) {
+    const r = harmonyRun(tones(sr, 2, [[hz, db2a(-12)]]), sr).at(1.0);
+    const err = r.notes.length ? centsOf(hz, r.notes[0]) : NaN;
+    worst = Math.max(worst, Math.abs(err));
+    out[`${sr}_${hz}`] = { detected: +(r.notes[0] || 0).toFixed(3), centsError: +err.toFixed(2), notes: r.notes.length };
+  }
+  results.single_tone_frequency = { ...out, worstCents: +worst.toFixed(2), pass: worst < 15 };
+}
+// 11 · One harmonic-rich note (2f, 3f — themselves a fifth apart): no confident fifth
+{
+  const out = {};
+  for (const [name, parts] of [['A3_h1-4', [[220, .4], [440, .3], [660, .25], [880, .15]]], ['E2_h1-6', [[82.41, .3], [164.81, .3], [247.22, .3], [329.63, .2], [412.03, .15], [494.44, .1]]],
+                               ['A3_strong_h3', [[220, .2], [440, .25], [660, .4], [880, .1]]]]) {
+    const r = harmonyRun(tones(48000, 2, parts), 48000);
+    let maxConf = 0, confident = 0; for (let i = 0; i < r.tr.frames; i++) { maxConf = Math.max(maxConf, r.tr.conf[i]); if (r.tr.state[i] === 2) confident++; }
+    out[name] = { notesMid: r.at(1.0).notes.map(v => +v.toFixed(1)), maxConfidence: +maxConf.toFixed(3), confidentFrames: confident };
+  }
+  results.harmonic_rich_single_note = { ...out, pass: Object.values(out).every(o => o.confidentFrames === 0) };
+}
+// 12 · Two sines a fifth apart, then a major third (control)
+{
+  const sr = 48000, x = new Float32Array(sr * 4), a = db2a(-12);
+  for (let i = 0; i < x.length; i++) {
+    const t = i / sr, upper = t < 2 ? 220 * 2 ** (7 / 12) : 220 * 2 ** (4 / 12);
+    x[i] = a * Math.sin(2 * Math.PI * 220 * t) + a * Math.sin(2 * Math.PI * upper * t);
+  }
+  const r = harmonyRun(x, sr), f5 = r.at(1.5), m3 = r.at(3.5);
+  // latency: time from the fifth's start (0 s) until confidence ≥ 0.5, and from the change at 2 s until it falls below 0.1
+  let on = NaN, off = NaN;
+  for (let i = 0; i < r.tr.frames; i++) { const t = i * r.h.hop; if (Number.isNaN(on) && r.tr.conf[i] >= 0.5) on = t; if (t > 2 && Number.isNaN(off) && r.tr.conf[i] < 0.1) off = t - 2; }
+  results.fifth_then_third = { fifth: { notes: f5.notes.map(v => +v.toFixed(1)), score: +f5.raw.toFixed(3), confidence: +f5.conf.toFixed(3), state: f5.state },
+    third: { notes: m3.notes.map(v => +v.toFixed(1)), score: +m3.raw.toFixed(3), confidence: +m3.conf.toFixed(3), state: m3.state },
+    msToConfident: +(on * 1000).toFixed(0), msToLetGoAfterChange: +(off * 1000).toFixed(0),
+    pass: f5.state === 2 && f5.conf > 0.7 && m3.state !== 2 && m3.conf < 0.1 };
+}
+// 13 · Equal-tempered fifth and detuned variants (tolerance ±25 cents by default)
+{
+  const out = {};
+  for (const dc of [0, 1.96, 10, -20, 30, 40]) {
+    const r = harmonyRun(tones(48000, 2, [[220, db2a(-12)], [220 * 2 ** ((700 + dc) / 1200), db2a(-12)]]), 48000).at(1.5);
+    out[`${dc >= 0 ? '+' : ''}${dc}c`] = { score: +r.raw.toFixed(3), confidence: +r.conf.toFixed(3), state: r.state };
+  }
+  const inside = ['+0c', '+1.96c', '+10c', '-20c'].every(k => out[k].state === 2), outside = ['+30c', '+40c'].every(k => out[k].state !== 2);
+  const monotone = out['+0c'].score >= out['+10c'].score - 0.01 && out['+10c'].score >= out['-20c'].score - 0.01;   // falls with distance from the fifth (0.01 slack)
+  results.detuned_fifths = { ...out, toleranceCents: P.harmony.tolerance, pass: inside && outside && monotone };
+}
+// 14 · Two harmonic-rich notes a fifth apart (A3 + E4, shared overtone at 660 Hz)
+{
+  const parts = [[220, .3], [440, .2], [660, .15], [880, .08], [329.63, .3], [659.26, .1], [988.88, .08]];
+  const r = harmonyRun(tones(48000, 2, parts), 48000).at(1.0);
+  results.rich_fifth = { notes: r.notes.map(v => +v.toFixed(1)), score: +r.raw.toFixed(3), confidence: +r.conf.toFixed(3), state: r.state, pass: r.state === 2 };
+}
+// 15 · Silence and noise: no notes, no shimmer
+{
+  const sr = 48000, x = new Float32Array(sr * 2);
+  for (let i = sr; i < x.length; i++) x[i] = db2a(-30) * (rng() * 2 - 1);
+  const r = harmonyRun(x, sr); let maxConf = 0; for (let i = 0; i < r.tr.frames; i++) maxConf = Math.max(maxConf, r.tr.conf[i]);
+  results.silence_and_noise_harmony = { maxConfidence: +maxConf.toFixed(3), pass: maxConf < 0.1 };
+}
+
 mkdirSync(join(HERE, 'captures'), { recursive: true });
-writeFileSync(join(HERE, 'captures', 'fixtures.json'), JSON.stringify({ config: CONFIG, bias: BIAS, music, results }, null, 2));
+writeFileSync(join(HERE, 'captures', 'fixtures.json'), JSON.stringify({ config: CONFIG, harmony: { config: HARMONY, settings: P.harmony }, bias: BIAS, music, results }, null, 2));
 for (const [k, v] of Object.entries(results)) console.log((v.pass === undefined ? '  · ' : v.pass ? 'PASS' : 'FAIL'), k, JSON.stringify(v));

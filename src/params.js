@@ -135,6 +135,22 @@ export const P = {
     size: 0.5,             // particle size, scene units (independent of spark size)
   },
 
+  // HARMONY → SHIMMER — experimental (spec §6). A fifth between two detected notes, held
+  // long enough, makes the rims twinkle. Precise path only (tracks, test pattern). See
+  // src/analysis/harmony.js for how notes and the score are found.
+  harmony: {
+    on: false,             // off by default: an experiment, not part of any preset
+    amount: 1,             // shimmer brightness at full confidence
+    tolerance: 25,         // cents either side of a fifth (701 ± 1: just 701.96, equal-tempered 700)
+    activate: 0.5,         // score that counts as confident …
+    letGo: 0.3,            // … and the score below which it lets go (hysteresis)
+    persist: 200,          // ms the score must stay confident before the response starts
+    bridge: 250,           // ms below "let go" that are bridged (e.g. a drum hit masking the notes)
+    rise: 100,             // ms to 90 % once confident
+    release: 400,          // ms to decay by 90 % after letting go
+    tuning: 440,           // A4 in Hz, for note names and chroma only
+  },
+
   // PERFORMANCE MACROS — each scales exactly one thing, nothing else.
   macros: {
     movement: 1,           // × maximum lift
@@ -150,8 +166,8 @@ export const P = {
 
   // ── Transient: never saved in a scene ──────────────────────────────────────
   diag: { view: 'normal' },                    // normal | nobloom | bloom | emission | surface
-  manual: { on: false, voice: 1, level: 0.8 }, // a known level and single hits, injected after the detector
-  solo: { dest: 'none' },                      // none | lift | rim | hits | colour | sparks
+  manual: { on: false, voice: 1, level: 0.8, shimmer: false }, // a known level, single hits, full harmony confidence — injected after the detector
+  solo: { dest: 'none' },                      // none | lift | rim | hits | colour | shimmer | sparks
   inspect: { dest: 'lift', voice: 1 },         // which mapping the meters show
 };
 

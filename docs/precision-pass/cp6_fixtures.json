@@ -1,0 +1,278 @@
+{
+  "config": {
+    "bandWin": 4096,
+    "bandHop": 512,
+    "fastWin": 1024,
+    "fastHop": 256,
+    "nBands": 32,
+    "fMin": 30,
+    "fMax": 16000,
+    "compression": 1000,
+    "noveltyFloorDb": -80
+  },
+  "harmony": {
+    "config": {
+      "win": 8192,
+      "hop": 1024,
+      "fLo": 55,
+      "fHi": 1760,
+      "peakMax": 6000,
+      "maxPeaks": 32,
+      "peakFloorDb": -70,
+      "relFloorDb": 45,
+      "harmonics": 8,
+      "harmTolCents": 35,
+      "maxNotes": 4,
+      "noteRel": 0.15
+    },
+    "settings": {
+      "on": false,
+      "amount": 1,
+      "tolerance": 25,
+      "activate": 0.5,
+      "letGo": 0.3,
+      "persist": 200,
+      "bridge": 250,
+      "rise": 100,
+      "release": 400,
+      "tuning": 440
+    }
+  },
+  "bias": {
+    "band": 0.025,
+    "fast": 0.0041,
+    "live": 0
+  },
+  "music": {
+    "normalize": "preserve",
+    "gain": 0,
+    "noiseFloor": -60,
+    "gateHyst": 6,
+    "gateOpen": 10,
+    "gateClose": 150,
+    "reference": -6,
+    "tilt": 2.5,
+    "curve": 1.6,
+    "adapt": 0.5,
+    "hitSensitivity": 5,
+    "cooldownLow": 80,
+    "cooldownHigh": 40,
+    "syncOffset": 0
+  },
+  "results": {
+    "silence_then_below_gate": {
+      "events": 0,
+      "maxNormalisedLevel": 0,
+      "pass": true
+    },
+    "sustained_sine_preserve": {
+      "meanLevel": 0.6398,
+      "driftPct": 0,
+      "pass": true
+    },
+    "sustained_sine_adaptive": {
+      "meanLevel": 0.712,
+      "driftPct": 11.04,
+      "note": "adaptive moves the reference by design (bounded ±12 dB × adapt)"
+    },
+    "six_dB_step": {
+      "rawDiffDb": 6,
+      "normalisedBefore": 0.496,
+      "normalisedAfter": 0.64,
+      "pass": true
+    },
+    "sweep_band_handoff": {
+      "worstSummedErrorDb": 0.005,
+      "worstFrameJumpDb": 0.001,
+      "pass": true
+    },
+    "isolated_bursts": {
+      "bursts": 20,
+      "detected": 20,
+      "missed": 0,
+      "duplicates": 0,
+      "falseEventsAwayFromBursts": 0,
+      "spillHitsInOtherVoices": 39,
+      "medianAbsErrorMs": 1.65,
+      "p95AbsErrorMs": 4.75,
+      "meanSignedErrorMs": -0.49,
+      "rawBiasMs": {
+        "band": -25.01,
+        "fast": -4.08
+      },
+      "lookaheadMs": {
+        "band": 10.67,
+        "fast": 5.33
+      },
+      "pass": true
+    },
+    "isolated_bursts_holdout": {
+      "sampleRate": 44100,
+      "bursts": 16,
+      "missed": 0,
+      "duplicates": 0,
+      "medianAbsErrorMs": 1.9,
+      "p95AbsErrorMs": 3.62,
+      "meanSignedErrorMs": 0.3,
+      "pass": true
+    },
+    "rapid_high_125ms": {
+      "expected": 24,
+      "detectedInBrilliance": 24,
+      "pass": true
+    },
+    "rapid_high_62.5ms": {
+      "expected": 48,
+      "detectedInBrilliance": 48,
+      "pass": true
+    },
+    "phase_opposed_stereo": {
+      "globalDb": -20,
+      "pass": true
+    },
+    "sample_rates": {
+      "44100": {
+        "loudestVoice": "mid",
+        "upperMidDb": -136.886,
+        "midDb": -20,
+        "globalDb": -20
+      },
+      "48000": {
+        "loudestVoice": "mid",
+        "upperMidDb": -111.74,
+        "midDb": -20,
+        "globalDb": -20
+      },
+      "pass": true
+    },
+    "single_tone_frequency": {
+      "44100_220": {
+        "detected": 219.945,
+        "centsError": -0.43,
+        "notes": 1
+      },
+      "44100_440": {
+        "detected": 439.915,
+        "centsError": -0.34,
+        "notes": 1
+      },
+      "44100_880": {
+        "detected": 880.026,
+        "centsError": 0.05,
+        "notes": 1
+      },
+      "48000_220": {
+        "detected": 219.96,
+        "centsError": -0.32,
+        "notes": 1
+      },
+      "48000_440": {
+        "detected": 440.043,
+        "centsError": 0.17,
+        "notes": 1
+      },
+      "48000_880": {
+        "detected": 880.078,
+        "centsError": 0.15,
+        "notes": 1
+      },
+      "worstCents": 0.43,
+      "pass": true
+    },
+    "harmonic_rich_single_note": {
+      "A3_h1-4": {
+        "notesMid": [
+          220
+        ],
+        "maxConfidence": 0,
+        "confidentFrames": 0
+      },
+      "E2_h1-6": {
+        "notesMid": [
+          82.4
+        ],
+        "maxConfidence": 0,
+        "confidentFrames": 0
+      },
+      "A3_strong_h3": {
+        "notesMid": [
+          220
+        ],
+        "maxConfidence": 0,
+        "confidentFrames": 0
+      },
+      "pass": true
+    },
+    "fifth_then_third": {
+      "fifth": {
+        "notes": [
+          220,
+          329.7
+        ],
+        "score": 0.98,
+        "confidence": 0.98,
+        "state": 2
+      },
+      "third": {
+        "notes": [
+          220,
+          277.3
+        ],
+        "score": 0,
+        "confidence": 0,
+        "state": 0
+      },
+      "msToConfident": 213,
+      "msToLetGoAfterChange": 560,
+      "pass": true
+    },
+    "detuned_fifths": {
+      "+0c": {
+        "score": 0.98,
+        "confidence": 0.98,
+        "state": 2
+      },
+      "+1.96c": {
+        "score": 0.985,
+        "confidence": 0.985,
+        "state": 2
+      },
+      "+10c": {
+        "score": 0.985,
+        "confidence": 0.985,
+        "state": 2
+      },
+      "-20c": {
+        "score": 0.579,
+        "confidence": 0.579,
+        "state": 2
+      },
+      "+30c": {
+        "score": 0,
+        "confidence": 0,
+        "state": 0
+      },
+      "+40c": {
+        "score": 0,
+        "confidence": 0,
+        "state": 0
+      },
+      "toleranceCents": 25,
+      "pass": true
+    },
+    "rich_fifth": {
+      "notes": [
+        220,
+        329.7
+      ],
+      "score": 0.548,
+      "confidence": 0.587,
+      "state": 2,
+      "pass": true
+    },
+    "silence_and_noise_harmony": {
+      "maxConfidence": 0,
+      "pass": true
+    }
+  }
+}

@@ -27,6 +27,7 @@ export const response = {
   lift: new Float32Array(COLS), rim: new Float32Array(COLS), colour: new Float32Array(COLS),
   hit: new Float32Array(NB), hitTarget: new Float32Array(NB), hitHold: new Float32Array(NB),
   hitCount: new Uint32Array(NB), lastHit: new Float32Array(NB),
+  shimmer: 0,                            // harmony confidence (0..1), kept in the global column's g channel
   hist: new Float32Array(HIST * COLS * 4),
   tex: null,
   rows: 0,                               // rows written since the last clear
@@ -38,9 +39,10 @@ response.tex.needsUpdate = true;
 const shape = (x, m) => Math.pow(ss(x * m.sensitivity), m.curve);
 
 // One update of dt seconds. levels: Float32Array(8) normalised 0..1; global 0..1;
-// hits: Float32Array(8) of event strengths (0 = no event this update).
-export function stepResponse(levels, global, hits, dt) {
+// hits: Float32Array(8) of event strengths (0 = no event this update); shimmer: harmony confidence.
+export function stepResponse(levels, global, hits, dt, shimmer = 0) {
   const M = P.map, R = response;
+  R.shimmer = shimmer;
   for (let k = 0; k < COLS; k++) R.measured[k] = k < NB ? levels[k] : global;
   // lift: rise shared, fall eased log-wise from sub (fall) to air (fallHigh)
   const up = t90coef(M.lift.rise, dt);
@@ -73,7 +75,7 @@ function writeRow() {
   R.hist.copyWithin(row, 0, (HIST - 1) * row);
   for (let k = 0; k < COLS; k++) {
     const i = k * 4;
-    R.hist[i] = R.lift[k]; R.hist[i + 1] = k < NB ? R.hit[k] : 0; R.hist[i + 2] = R.rim[k]; R.hist[i + 3] = R.colour[k];
+    R.hist[i] = R.lift[k]; R.hist[i + 1] = k < NB ? R.hit[k] : R.shimmer;      // global column: g = shimmer (travels with the ripple) R.hist[i + 2] = R.rim[k]; R.hist[i + 3] = R.colour[k];
   }
   R.rows = Math.min(HIST, R.rows + 1);
   R.tex.needsUpdate = true;
@@ -90,7 +92,7 @@ export function histAt(col, row, channel = 0) {
 export function clearResponse() {
   const R = response;
   for (const a of [R.measured, R.lift, R.rim, R.colour, R.hit, R.hitTarget, R.hitHold, R.lastHit]) a.fill(0);
-  R.hitCount.fill(0); R.hist.fill(0); R.rows = 0; R.tex.needsUpdate = true;
+  R.hitCount.fill(0); R.hist.fill(0); R.rows = 0; R.shimmer = 0; R.tex.needsUpdate = true;
 }
 
 // How long the history reaches back, at a given update rate.

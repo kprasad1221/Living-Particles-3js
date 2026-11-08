@@ -16,6 +16,7 @@
 //    band path   4096 / 512   85.3 ms window, 10.7 ms hop @ 48 kHz  → 32 log bands, 8 voices, global,
 //                                                                      novelty for the 4 low voices
 //    fast path   1024 / 256   21.3 ms window, 5.33 ms hop           → novelty for the 4 high voices
+//    harmonic    8192 / 1024  170.7 ms window, 21.3 ms hop          → peaks, notes (harmony.js)
 //
 //  Power: P_k = 2·|X_k|² / (N·Σw²) for 0 < k < N/2, so Σ P_k over a band is that band's
 //  mean-square value; a full-scale sine sums to 0.5 = 0 dB. Stereo is analysed per
@@ -28,8 +29,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { fft, hann } from './fft.js';
 import { BAND_EDGES, NB } from '../params.js';
+import { HARMONY, framePeaks, notesFromPeaks } from './harmony.js';
 
-export const ANALYSIS_VERSION = 'lp-analysis-1';
+// lp-analysis-2 adds the harmonic path (8192 / 1024); band and fast paths are unchanged.
+export const ANALYSIS_VERSION = 'lp-analysis-2';
+export const STORED_PEAKS = 12;            // strongest harmonic-path peaks kept per frame (for chroma)
 export const CONFIG = {
   bandWin: 4096, bandHop: 512,
   fastWin: 1024, fastHop: 256,
@@ -143,7 +147,7 @@ export function analyzePCM(channels, sr, cfg = CONFIG, onProgress = null) {
       for (let v = 0; v < NB; v++) voiceDb[i * NB + v] = toDb(integrate(P, voices[v]));
       globalDb[i] = toDb(integrate(P, glob));
       novelty(P, prevC, curC, voices, 0, LOW_NOVELTY_VOICES, nov, i * LOW_NOVELTY_VOICES, cfg);
-      if (onProgress && i % 512 === 0) onProgress(0.75 * i / frames);
+      if (onProgress && i % 512 === 0) onProgress(0.6 * i / frames);
     }
     Object.assign(out, { frames, hop: H / sr, bandDb, voiceDb, globalDb, noveltyLow: nov,
       bandSupport: Float32Array.from(fine.map(b => b.support)) });
@@ -159,9 +163,29 @@ export function analyzePCM(channels, sr, cfg = CONFIG, onProgress = null) {
     for (let i = 0; i < frames; i++) {
       framePower(channels, i * H, N, w, sw2, re, im, P);
       novelty(P, prevC, curC, voices, k0, NB, nov, i * (NB - k0), cfg);
-      if (onProgress && i % 1024 === 0) onProgress(0.75 + 0.25 * i / frames);
+      if (onProgress && i % 1024 === 0) onProgress(0.6 + 0.2 * i / frames);
     }
     Object.assign(out, { fastFrames: frames, fastHop: H / sr, noveltyHigh: nov });
+  }
+  // harmonic path (the §6 experiment): peaks and notes per frame
+  {
+    const hc = HARMONY, N = hc.win, H = hc.hop, w = hann(N), sw2 = (3 * N) / 8, df = sr / N, M = hc.maxNotes;
+    const frames = Math.ceil(len / H) + 1;
+    const notesF = new Float32Array(frames * M), notesS = new Float32Array(frames * M), nNotes = new Uint8Array(frames);
+    const peakF = new Float32Array(frames * STORED_PEAKS), peakA = new Float32Array(frames * STORED_PEAKS);
+    const re = new Float64Array(N), im = new Float64Array(N), P = new Float64Array(N / 2 + 1);
+    const pf = new Float32Array(hc.maxPeaks), pa = new Float32Array(hc.maxPeaks), nf = new Float32Array(M), ns = new Float32Array(M);
+    for (let i = 0; i < frames; i++) {
+      framePower(channels, i * H, N, w, sw2, re, im, P);
+      const n = framePeaks(P, df, hc, pf, pa);
+      nNotes[i] = notesFromPeaks(pf, pa, n, hc, nf, ns);
+      notesF.set(nf, i * M); notesS.set(ns, i * M);
+      for (let j = 0; j < Math.min(n, STORED_PEAKS); j++) { peakF[i * STORED_PEAKS + j] = pf[j]; peakA[i * STORED_PEAKS + j] = pa[j]; }
+      if (onProgress && i % 256 === 0) onProgress(0.8 + 0.2 * i / frames);
+    }
+    out.harmony = { frames, hop: H / sr, win: N, maxNotes: M, notesF, notesS, nNotes, peakF, peakA, storedPeaks: STORED_PEAKS,
+      config: { ...hc } };
+    out.meta.harmonyWin = N; out.meta.harmonyHop = H;
   }
   onProgress?.(1);
   return out;

@@ -13,12 +13,13 @@
 //    4  checkpoints 3–4: groups named for what the artist changes (floor, movement, music,
 //       map, pointer, sparks, macros); timing shown as time-to-90 % in ms
 //    5  checkpoint 5: plume group added (older scenes get the defaults, plume off)
+//    6  checkpoint 6: harmony group added (experimental, off for older saves)
 //  Later checkpoints append steps here.
 // ─────────────────────────────────────────────────────────────────────────────
 import { P, VERSION } from './params.js';
 import { isLegacy, fromLegacy } from './looks.js';
 
-export const SCHEMA = 5;
+export const SCHEMA = 6;
 
 // Groups of P written into a scene. Everything else in P is transient.
 export const SAVED_GROUPS = () => Object.keys(P).filter(k => !TRANSIENT.includes(k) && k !== 'looks');
@@ -56,6 +57,7 @@ const STEPS = {
   },
   // 4 → 5: new group only; nothing renamed. Missing groups keep their defaults on apply.
   4: s => { s.schema = 5; return s; },
+  5: s => { s.schema = 6; return s; },
 };
 
 export function migrate(input) {
@@ -99,6 +101,8 @@ const RULES = [
   P => { for (const k of Object.keys(P.macros)) P.macros[k] = clamp(P.macros[k], 0, 3); },
   P => { const L = P.plume; L.perHit = clamp(Math.round(L.perHit), 0, 400); L.maxConcurrent = clamp(Math.round(L.maxConcurrent), 1, 12);
          L.length = clamp(L.length, 0.2, 10); L.size = clamp(L.size, 0.01, 4); L.trail = clamp(Math.round(L.trail), 0, 6); L.voice = clamp(Math.round(L.voice), 0, 7); },
+  P => { const H = P.harmony; H.tolerance = clamp(H.tolerance, 1, 100); H.activate = clamp(H.activate, 0.05, 1); H.letGo = clamp(Math.min(H.letGo, H.activate - 0.01), 0, 0.99);
+         H.persist = clamp(H.persist, 0, 2000); H.bridge = clamp(H.bridge, 0, 2000); H.rise = clamp(H.rise, 0, 5000); H.release = clamp(H.release, 0, 10000); H.tuning = clamp(H.tuning, 400, 480); H.amount = clamp(H.amount, 0, 4); },
 ];
 export function validate() { for (const r of RULES) r(P); }
 

@@ -87,6 +87,7 @@ const vertexShader = /* glsl */`
   uniform sampler2D uHist;
   uniform float uTime, uRowHz, uRowShift, uTravel, uExtrude, uShape, uFloor, uCeil, uSpread, uBase, uJitter, uGap, uSwell, uRimSource;
   uniform vec4 uAmt;            // destination amounts × solo: lift, hits, rim, colour
+  uniform float uShimmer;       // harmony → shimmer amount × on × solo
   uniform vec4 uAff;            // x, z, radius, on
   uniform float uAffLift, uAffGlow;
   uniform vec3 uPalette[${NB}];
@@ -97,7 +98,7 @@ const vertexShader = /* glsl */`
   varying vec2 vLocal;          // hex-local position (circumradius 1)
   varying float vY;             // 0 at the floor, 1 at the top edge
   varying float vTop;           // 1 on the top cap
-  varying float vAct, vOnset, vPulse, vAff, vHeight;
+  varying float vAct, vOnset, vPulse, vAff, vHeight, vShim;
   varying vec3 vColor, vWorld;
 
   const float ROWS = ${HIST.toFixed(1)};
@@ -126,6 +127,9 @@ const vertexShader = /* glsl */`
     float pulse = hist(uRimSource, row).b * uAmt.z;
     float sub = smoothstep(uFloor, uCeil, hist(0.0, row).r) * uAmt.x;
     float drift = clamp(h.a * uAmt.w, 0.0, 1.0);
+    // Shimmer: harmony confidence (global column, g) makes each rim twinkle at its own rate.
+    float tw = pow(0.5 + 0.5 * sin(uTime * (6.0 + aSeed.w * 9.0) + aSeed.w * 61.0), 6.0);
+    vShim = hist(${GLOBAL}.0, row).g * uShimmer * tw;
     float fold = 0.5 + 0.5 * sin(aTile.x * ${FOLD.kx} + uTime * ${FOLD.wx}) * cos(aTile.y * ${FOLD.kz} - uTime * ${FOLD.wz});
     float swell = uSwell * sub * fold;
 
@@ -162,7 +166,7 @@ const fragmentShader = /* glsl */`
   uniform float uDiag;          // 0 normal · 1 emission only · 2 surface only
 
   varying vec2 vLocal;
-  varying float vY, vTop, vAct, vOnset, vPulse, vAff, vHeight;
+  varying float vY, vTop, vAct, vOnset, vPulse, vAff, vHeight, vShim;
   varying vec3 vColor, vWorld;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -192,7 +196,8 @@ const fragmentShader = /* glsl */`
     vec3 face = uFace * (1.0 + 2.0 * g);
     vec3 fill = vColor * vAct * uFill * mix(inner, 0.55 + 0.45 * inner, uFillCore);
     vec3 topEmit = fill + rimCol * rimI * (rim + inner * uInnerSpill)
-                 + vec3(uHitWhiten * vOnset * rim);
+                 + vec3(uHitWhiten * vOnset * rim)
+                 + mix(vColor, vec3(1.0), 0.35) * vShim * 2.0 * rim;              // harmony shimmer
 
     // Sides: flat-shaded stone; the voice glows down from the top edge.
     vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
@@ -236,7 +241,7 @@ export class HexField {
       uHist: { value: histTex }, uTime: { value: 0 },
       uTravel: { value: 0 }, uExtrude: { value: 0 }, uShape: { value: 1 }, uFloor: { value: 0.2 }, uCeil: { value: 0.9 },
       uSpread: { value: 0.5 }, uBase: { value: 0.1 }, uJitter: { value: 0 }, uGap: { value: 0.05 }, uSwell: { value: 0 },
-      uRimSource: { value: 1 }, uAmt: { value: new THREE.Vector4(1, 1, 1, 0) },
+      uRimSource: { value: 1 }, uAmt: { value: new THREE.Vector4(1, 1, 1, 0) }, uShimmer: { value: 0 },
       uAff: { value: new THREE.Vector4(0, 0, 8, 0) }, uAffLift: { value: 0 }, uAffGlow: { value: 0 },
       uAffTint: { value: 0 }, uAffColor: { value: new THREE.Color(1, 1, 1) },
       uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
@@ -282,6 +287,7 @@ export class HexField {
     u.uSwell.value = Mv.swell; u.uRimSource.value = M.rim.source;
     const solo = P.solo.dest, on = d => (solo === 'none' || solo === d ? 1 : 0);
     u.uAmt.value.set(on('lift'), M.hits.amount * on('hits'), M.rim.amount * on('rim'), M.colour.amount * on('colour'));
+    u.uShimmer.value = P.harmony.on ? P.harmony.amount * on('shimmer') : 0;
     u.uAff.value.set(aff.x, aff.z, A.radius, aff.on * (solo === 'none' ? 1 : 0));
     u.uAffLift.value = A.lift; u.uAffGlow.value = A.glow; u.uAffTint.value = A.tint; u.uAffColor.value.set(A.color);
   }

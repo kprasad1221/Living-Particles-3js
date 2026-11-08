@@ -15,11 +15,12 @@
 //  equivalents live in the README, not in the labels.
 // ─────────────────────────────────────────────────────────────────────────────
 import { P, VOICE_NAMES, HIST } from '../params.js';
+import { noteName, fifthScore, PITCH_CLASSES } from '../analysis/harmony.js';
 import { LOOKS, LOOK_ORDER } from '../looks.js';
 import { Kit } from './kit.js';
 
 const VOICES = VOICE_NAMES.map((n, i) => [n, i]);
-const DEST = [['Floor lift', 'lift'], ['Rim breath', 'rim'], ['Hits (accent + flash)', 'hits'], ['Colour drift', 'colour']];
+const DEST = [['Floor lift', 'lift'], ['Rim breath', 'rim'], ['Hits (accent + flash)', 'hits'], ['Colour drift', 'colour'], ['Harmony → Shimmer (experimental)', 'shimmer']];
 const pctOf = x => `${Math.round(x * 100)} %`;
 
 export function buildPanel(container, app) {
@@ -181,7 +182,7 @@ export function buildPanel(container, app) {
   kit.select(mu, P.inspect, 'dest', { label: 'Inspect mapping', options: DEST, onChange: () => showMapping() });
   kit.select(mu, P.inspect, 'voice', { label: 'Meter voice', options: VOICES, tip: 'Which voice the meters follow (Floor lift and Hits are per voice).' });
   kit.select(mu, P.solo, 'dest', { label: 'Solo response', def: 'none', tip: 'Shows only this destination’s visual contribution; the music keeps playing. Not saved.',
-    options: [['none', 'none'], ['Floor lift', 'lift'], ['Rim breath', 'rim'], ['Hits', 'hits'], ['Colour drift', 'colour'], ['Sparks', 'sparks']] });
+    options: [['none', 'none'], ['Floor lift', 'lift'], ['Rim breath', 'rim'], ['Hits', 'hits'], ['Colour drift', 'colour'], ['Shimmer (harmony)', 'shimmer'], ['Sparks', 'sparks']] });
   const mapBodies = {};
   const mapRow = (dest, title, source) => {
     const b = document.createElement('div'); b.className = 'k-map'; mu.append(b); mapBodies[dest] = b;
@@ -201,6 +202,35 @@ export function buildPanel(container, app) {
   mapRow('rim', 'Source → Rim breath (whole floor)', true);
   mapRow('hits', 'Hit events → Accent + flash', false);
   mapRow('colour', 'Source → Colour drift (slow)', true);
+  // Harmony → Shimmer (experimental): its own body, because its source is evidence, not a level.
+  const hb = document.createElement('div'); hb.className = 'k-map'; mu.append(hb); mapBodies.shimmer = hb;
+  { const h = document.createElement('p'); h.className = 'k-maptitle'; h.textContent = 'Harmony → Shimmer · experimental'; hb.append(h);
+    const n = document.createElement('p'); n.className = 'k-note';
+    n.textContent = 'A fifth between two detected notes, held long enough, makes the rims twinkle. The score is a heuristic, not a probability; it is not chord recognition. Tracks and the test pattern only.';
+    hb.append(n); }
+  const Hm = P.harmony, DHm = D.harmony, reH = () => app.timeline.refreshHarmony();
+  const hCtrls = [];
+  const hOn = kit.toggle(hb, Hm, 'on', { label: 'On' });
+  hCtrls.push(kit.slider(hb, Hm, 'amount', { label: 'Shimmer amount', min: 0, max: 4, step: 0.01, unit: '×', def: DHm.amount }));
+  hCtrls.push(kit.slider(hb, Hm, 'tolerance', { label: 'Fifth tolerance', min: 1, max: 100, step: 1, unit: '¢', def: DHm.tolerance, onChange: reH, tip: 'Cents either side of a fifth (701 ± 1: just 3:2 and equal-tempered both fit).' }));
+  hCtrls.push(kit.slider(hb, Hm, 'activate', { label: 'Confident above', min: 0.05, max: 1, step: 0.01, def: DHm.activate, onChange: reH }));
+  hCtrls.push(kit.slider(hb, Hm, 'letGo', { label: 'Let go below', min: 0, max: 0.99, step: 0.01, def: DHm.letGo, onChange: () => { app.validate(); reH(); }, tip: 'Kept below “confident above” (hysteresis).' }));
+  hCtrls.push(kit.slider(hb, Hm, 'persist', { label: 'Must hold', min: 0, max: 2000, step: 1, unit: 'ms', def: DHm.persist, onChange: reH, tip: 'How long the score must stay confident before the shimmer starts. Adds this much delay.' }));
+  hCtrls.push(kit.slider(hb, Hm, 'bridge', { label: 'Bridge gaps', min: 0, max: 2000, step: 1, unit: 'ms', def: DHm.bridge, onChange: reH, tip: 'A drop below “let go” shorter than this is ignored, so a drum hit that masks the notes does not cut the shimmer.' }));
+  hCtrls.push(kit.slider(hb, Hm, 'rise', { label: 'Rise time', min: 0, max: 5000, step: 1, unit: 'ms', def: DHm.rise, onChange: reH, tip: 'Time to 90 %.' }));
+  hCtrls.push(kit.slider(hb, Hm, 'release', { label: 'Release time', min: 0, max: 10000, step: 1, unit: 'ms', def: DHm.release, onChange: reH, tip: 'Time to decay by 90 %.' }));
+  hCtrls.push(kit.slider(hb, Hm, 'tuning', { label: 'Tuning (A4)', min: 400, max: 480, step: 0.1, unit: 'Hz', def: DHm.tuning, tip: 'For note names and chroma only.' }));
+  const harmNow = () => {
+    const tl = app.timeline, H = tl.harm, f = tl.f && tl.f.harmony, i = tl.harmIdx;
+    if (!H || !f || i < 0) return null;
+    const M = f.maxNotes, n = f.nNotes[i], nf = Array.from(f.notesF.subarray(i * M, i * M + M)), ns = Array.from(f.notesS.subarray(i * M, i * M + M));
+    return { n, nf, ns, raw: H.raw[i], conf: H.conf[i], state: H.state[i], best: fifthScore(nf, ns, Hm.tolerance) };
+  };
+  kit.readout(hb, 'Notes', () => { const h = harmNow(); if (!h) return 'unavailable on this source'; return h.n ? h.nf.slice(0, h.n).map(f => noteName(f, Hm.tuning)).join(' · ') : 'none'; });
+  kit.readout(hb, 'Fifth', () => { const h = harmNow(); if (!h) return '—'; return h.best.score > 0 ? `${noteName(h.best.a, Hm.tuning)} → ${noteName(h.best.b, Hm.tuning)} · ${h.best.cents.toFixed(0)} ¢` : 'none in tolerance'; });
+  kit.readout(hb, 'Score · confidence', () => { const h = harmNow(); if (!h) return '—'; return `${h.raw.toFixed(2)} · ${h.conf.toFixed(2)} · ${['no evidence', 'uncertain', 'confident'][h.state]}`; },
+    { tip: 'Score: this frame’s best fifth. Confidence: after “must hold”, hysteresis, rise and release — what drives the shimmer.' });
+  kit.button(hb, 'Manual test: hold full confidence', () => { P.manual.shimmer = !P.manual.shimmer; }, { tip: 'Toggles. Forces confidence to 1 after the detector, to check the shimmer itself. Not saved.' });
   const showMapping = () => { for (const [d, b] of Object.entries(mapBodies)) b.hidden = d !== P.inspect.dest; };
   showMapping();
   const man = kit.sub(mu, 'Manual test');
@@ -273,6 +303,8 @@ export function buildPanel(container, app) {
     for (const c of ptr) c.setInactive(!Pt.on ? 'Pointer is off' : solo !== 'none' ? 'Solo response hides the pointer' : '');
     cOrbit.setInactive(Pt.mode !== 'orbit' ? 'Driven by the pointer' : '');
     for (const c of plCtrls) c.setInactive(!Pl.on ? 'Plume is off' : soloOther('sparks'));
+    const noHarm = app.timeline.mode !== 'precise' ? 'Live · basic analysis has no harmonic path' : '';
+    for (const c of hCtrls) c.setInactive(!Hm.on ? 'Shimmer is off' : noHarm || soloOther('shimmer'));
     morph.setInactive(P.looks.preview !== 'mix' ? `Previewing ${P.looks.preview.toUpperCase()}` : P.looks.drive !== 'hand' ? `Moved by ${P.looks.drive === 'lfo' ? 'the LFO' : 'a voice'}` : '');
   };
 

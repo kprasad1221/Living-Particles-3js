@@ -10,9 +10,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NB, HIST, VOICE_NAMES, P } from '../params.js';
 import { response } from '../response.js';
+import { chromaFromPeaks, noteName, PITCH_CLASSES } from '../analysis/harmony.js';
 
 const COLS = NB + 1;
-const DEST = { lift: 'Floor lift', rim: 'Rim breath', hits: 'Hits', colour: 'Colour drift' };
+const DEST = { lift: 'Floor lift', rim: 'Rim breath', hits: 'Hits', colour: 'Colour drift', shimmer: 'Shimmer' };
+const chroma = new Float32Array(12);
 
 export class Meters {
   constructor(canvas) {
@@ -80,13 +82,14 @@ export class Meters {
 
     // inspected mapping: measured / processed / output
     const dest = P.inspect.dest, it = timeline.interp;
+    if (dest === 'shimmer') { this.drawHarmony(timeline, x0, specH + 10 * d, sw, H - specH - 10 * d); return; }
     const col = dest === 'rim' || dest === 'colour' ? P.map[dest].source : insp;
     const voiceName = col === 8 ? 'global' : VOICE_NAMES[col];
     const mx = x0, my = specH + 10 * d, mw = sw, mh = (H - my) / 4;
     ctx.fillStyle = 'rgba(238,241,247,0.85)';
     ctx.fillText(`${voiceName} → ${DEST[dest]}${P.solo.dest === dest ? ' · solo' : ''}`, mx, my + mh * 0.4);
     const bar = (row, label, frac, text, c) => {
-      const y = my + mh * row, bx = mx + 70 * d, bwid = mw - 70 * d - 80 * d;
+      const y = my + mh * row, bx = mx + 70 * d, bwid = mw - 70 * d - 120 * d;
       ctx.fillStyle = 'rgba(238,241,247,0.55)'; ctx.fillText(label, mx, y + mh / 2);
       ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(bx, y + mh * 0.25, bwid, mh * 0.5);
       ctx.fillStyle = c; ctx.fillRect(bx, y + mh * 0.25, bwid * Math.max(0, Math.min(1, frac)), mh * 0.5);
@@ -105,5 +108,40 @@ export class Meters {
     if (dest === 'hits') { outV = response.hit[insp]; outT = `${response.hitCount[insp]} hits · last ${response.lastHit[insp].toFixed(2)}`; }
     else { outV = response[dest][col] * (P.map[dest].amount ?? 1); outT = `${(outV * 100).toFixed(0)} %`; }
     bar(3, 'output', outV, outT, `rgb(${r | 0},${g | 0},${b | 0})`);
+  }
+
+  // Harmony → Shimmer: chroma, then score / confidence / output.
+  drawHarmony(timeline, mx, my, mw, hh) {
+    const { ctx } = this, d = this.dpr, H = timeline.harm, f = timeline.f && timeline.f.harmony, i = timeline.harmIdx;
+    const mh = hh / 4;
+    ctx.fillStyle = 'rgba(238,241,247,0.85)';
+    if (!H || !f || i < 0) { ctx.fillText('Harmony → Shimmer · unavailable (live · basic analysis)', mx, my + mh * 0.4); return; }
+    const sp = f.storedPeaks;
+    chromaFromPeaks(f.peakF.subarray(i * sp, i * sp + sp), f.peakA.subarray(i * sp, i * sp + sp), sp, P.harmony.tuning, chroma);
+    const M = f.maxNotes, n = f.nNotes[i];
+    const names = Array.from(f.notesF.subarray(i * M, i * M + n)).map(v => noteName(v, P.harmony.tuning)).join(' · ') || 'no notes';
+    ctx.fillText(`Harmony → Shimmer${P.harmony.on ? '' : ' (off)'}${P.solo.dest === 'shimmer' ? ' · solo' : ''} · ${names}`, mx, my + mh * 0.4);
+    // chroma: 12 cells
+    const cx = mx + 70 * d, cw = (mw - 70 * d - 120 * d) / 12, cy = my + mh * 1.05, ch = mh * 0.8;
+    ctx.fillStyle = 'rgba(238,241,247,0.55)'; ctx.fillText('chroma', mx, cy + ch / 2);
+    for (let k = 0; k < 12; k++) {
+      ctx.fillStyle = `rgba(255,255,255,${0.06 + 0.8 * chroma[k]})`; ctx.fillRect(cx + k * cw + 1, cy, cw - 2, ch);
+      ctx.fillStyle = chroma[k] > 0.5 ? 'rgba(0,0,0,0.8)' : 'rgba(238,241,247,0.5)';
+      if (PITCH_CLASSES[k].length === 1) { ctx.textAlign = 'center'; ctx.fillText(PITCH_CLASSES[k], cx + (k + 0.5) * cw, cy + ch / 2); ctx.textAlign = 'left'; }   // naturals labelled; sharps are the unlabelled cells
+    }
+    const bar = (row, label, frac, text, c) => {
+      const y = my + mh * row, bx = mx + 70 * d, bwid = mw - 70 * d - 120 * d;
+      ctx.fillStyle = 'rgba(238,241,247,0.55)'; ctx.fillText(label, mx, y + mh / 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(bx, y + mh * 0.25, bwid, mh * 0.5);
+      ctx.fillStyle = c; ctx.fillRect(bx, y + mh * 0.25, bwid * Math.max(0, Math.min(1, frac)), mh * 0.5);
+      ctx.fillStyle = 'rgba(238,241,247,0.8)'; ctx.fillText(text, bx + bwid + 6 * d, y + mh / 2);
+      return { bx, bwid, y };
+    };
+    const b = bar(2, 'fifth score', H.raw[i], H.raw[i].toFixed(2), 'rgba(238,241,247,0.7)');
+    for (const [v, c] of [[P.harmony.activate, 'rgba(120,220,255,0.9)'], [P.harmony.letGo, 'rgba(255,120,120,0.9)']]) {
+      ctx.fillStyle = c; ctx.fillRect(b.bx + b.bwid * v, b.y + mh * 0.15, 1.5 * d, mh * 0.7);
+    }
+    const out = P.manual.shimmer ? 1 : H.conf[i];
+    bar(3, 'confidence', out, `${out.toFixed(2)} · ${P.manual.shimmer ? 'manual test' : ['no evidence', 'uncertain', 'confident'][H.state[i]]}`, 'rgba(255,255,255,0.9)');
   }
 }

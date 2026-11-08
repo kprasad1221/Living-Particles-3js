@@ -8,7 +8,7 @@ import { P } from '../params.js';
 import { formatValue, parseValue } from './kit.js';
 
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const DEST_NAMES = { lift: 'Floor lift', rim: 'Rim breath', hits: 'Hits', colour: 'Colour drift' };
+const DEST_NAMES = { lift: 'Floor lift', rim: 'Rim breath', hits: 'Hits', colour: 'Colour drift', shimmer: 'Shimmer' };
 
 export function buildStrip(container, app) {
   container.textContent = '';
@@ -44,15 +44,17 @@ export function buildStrip(container, app) {
   const glw = knob('Glow', () => P.macros.glow, x => { P.macros.glow = x; }, { min: 0, max: 3, step: 0.01, unit: '×', tip: 'Scales glow amount (bloom strength) only.' });
   // Sensitivity of the inspected mapping, on one 0–1 knob: mappings are log 0.1×–8×, hits are 0–10.
   const isHits = () => P.inspect.dest === 'hits';
+  const noSens = () => !isHits() && !(P.map[P.inspect.dest] && 'sensitivity' in P.map[P.inspect.dest]);   // e.g. shimmer
   const toN = v => (isHits() ? v / 10 : Math.log(v / 0.1) / Math.log(80));
   const fromN = n => (isHits() ? n * 10 : 0.1 * Math.pow(80, n));
-  const sensVal = () => (isHits() ? P.music.hitSensitivity : P.map[P.inspect.dest].sensitivity);
+  const sensVal = () => (isHits() ? P.music.hitSensitivity : noSens() ? 1 : P.map[P.inspect.dest].sensitivity);
   const sens = knob('Sensitivity', () => toN(sensVal()), n => {
     if (isHits()) { P.music.hitSensitivity = +fromN(n).toFixed(2); app.redetect(); }
+    else if (noSens()) return;
     else P.map[P.inspect.dest].sensitivity = +fromN(n).toFixed(3);
   }, { min: 0, max: 1, step: 0.001, tip: 'Sensitivity of the mapping inspected in Music response (hits: the detector’s 0–10).',
     label: () => `Sens · ${DEST_NAMES[P.inspect.dest]}`,
-    fmt: () => (isHits() ? sensVal().toFixed(1) : `${sensVal().toFixed(2)}×`),
+    fmt: () => (isHits() ? sensVal().toFixed(1) : noSens() ? 'n/a' : `${sensVal().toFixed(2)}×`),
     parse: t => { const x = parseFloat(t); return Number.isFinite(x) ? toN(Math.max(isHits() ? 0 : 0.1, x)) : NaN; } });
   const group = h('div', 's-group'); group.append(play, restart, scene);
   const group2 = h('div', 's-group'); group2.append(seg, mix);

@@ -8,6 +8,7 @@ virtual audio clock (sources.virtual), so every shot and check is repeatable.
   python capture.py motion av2 av2p        # orbiting-camera clips, side by side
   python capture.py ui                     # interface at 1440, 820 and 390 px
   python capture.py phrase                 # matched rest/attack/crest/release on the composed excerpt
+  python capture.py harmony                # Harmony → Shimmer off/on and its meters, on the same excerpt
 
 Waveform fixtures (no browser): node tools/fixtures.mjs
 """
@@ -301,10 +302,39 @@ async def phrase():
     print(json.dumps(res, indent=1))
     with open(os.path.join(OUT, 'phrase.json'), 'w') as f: json.dump(res, f, indent=2)
 
+async def harmony():
+    """Harmony → Shimmer on the composed excerpt (its pad is A minor: A–E is a fifth).
+    Off vs on at the rest moment, and the interface with the harmony meters open."""
+    from phrase_excerpt import write
+    wav = write(os.path.join(OUT, 'phrase_excerpt.wav'))
+    async with async_playwright() as p:
+        b = await launch(p); page, logs = await boot(b)
+        await page.set_input_files('#fileInput', wav)
+        for _ in range(240):
+            if await page.evaluate("window.__lp.sources.mode === 'track' && window.__lp.ready()"): break
+            await page.evaluate('window.__fake.step(16.6667)'); await page.wait_for_timeout(100)
+        res = {}
+        await page.evaluate("() => { const lp = window.__lp; lp.app.loadPlumeScene(); lp.P.pointer.on = false; lp.P.inspect.dest = 'shimmer'; lp.P.harmony.amount = 1.5; }")
+        # the confidence track over the excerpt, sampled every 0.5 s
+        res['track'] = await page.evaluate("""() => { const tl = window.__lp.timeline, H = tl.harm, out = [];
+          for (let t = 0; t <= 20; t += 0.5) { const i = Math.min(H.frames - 1, Math.round(t / H.hop)); out.push([t, +H.raw[i].toFixed(2), +H.conf[i].toFixed(2), H.state[i]]); } return out; }""")
+        for on, clean, name in [(False, True, 'harmony_off'), (True, True, 'harmony_on'), (True, False, 'harmony_meters')]:
+            await page.evaluate(f"document.body.classList.toggle('perform', {str(clean).lower()}); document.querySelector('.toggles').style.visibility = '{'hidden' if clean else ''}'; window.__lp.P.harmony.on = {str(on).lower()}; window.__lp.panel && window.__lp.panel.refresh && window.__lp.panel.refresh()")
+            await page.evaluate("window.__lp.goTo('stand')")
+            await play_to(page, 2.5, 0.5)
+            for _ in range(2): await page.evaluate('window.__fake.step(16.6667)')
+            await page.wait_for_timeout(150)
+            out = os.path.join(OUT, f'{name}.png'); await page.screenshot(path=out); print('saved', out)
+        res['errors'] = [l for l in logs if l.startswith('[error]') or l.startswith('[pageerror]')]
+        await b.close()
+    print(json.dumps(res))
+    with open(os.path.join(OUT, 'harmony.json'), 'w') as f: json.dump(res, f, indent=2)
+
 if __name__ == '__main__':
     args = sys.argv[1:]
     if args == ['check']: asyncio.run(check())
     elif args == ['phrase']: asyncio.run(phrase())
+    elif args == ['harmony']: asyncio.run(harmony())
     elif args == ['ui']: asyncio.run(ui_views())
     elif args[:1] == ['diag']: asyncio.run(diag_views(*(args[1:2] or ['av2p'])))
     elif args[:1] == ['motion']: asyncio.run(motion(tuple(args[1:3]) if len(args) >= 3 else ('av2', 'av2p')))

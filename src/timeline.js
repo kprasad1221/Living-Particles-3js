@@ -17,6 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NB, HIST, P } from './params.js';
 import { Interpreter, LiveAnalyzer, CONFIG } from './analysis/features.js';
+import { harmonyTrack, trackOpts } from './analysis/harmony.js';
 import { stepResponse, clearResponse } from './response.js';
 
 export class Timeline {
@@ -36,6 +37,7 @@ export class Timeline {
   // ── precise ──
   setPrecise(features, events, duration, loop) {
     this.mode = 'precise'; this.f = features; this.ev = events; this.dur = duration; this.loop = loop;
+    this.refreshHarmony();
     this.framesPerLoop = Math.max(1, Math.ceil(duration / features.hop - 1e-9));
     this.started = false;
   }
@@ -44,6 +46,19 @@ export class Timeline {
     if (this.mode === 'precise') this._seekEvents(this.latest);
   }
   setLoop(loop) { this.loop = loop; }
+  // Harmony settings changed (or new features): recompute score → confidence for the whole
+  // track. Cheap (no transforms), and the same audio time always gives the same value.
+  refreshHarmony() {
+    const h = this.mode === 'precise' && this.f && this.f.harmony;
+    this.harm = h ? harmonyTrack(h, trackOpts(P.harmony)) : null;
+    this.harmIdx = -1;
+  }
+  harmonyAt(localTime) {
+    const H = this.harm; if (!H) return 0;
+    const x = Math.min(Math.max(localTime / H.hop, 0), H.frames - 1), i = Math.floor(x), j = Math.min(i + 1, H.frames - 1);
+    this.harmIdx = Math.round(x);
+    return H.conf[i] + (H.conf[j] - H.conf[i]) * (x - i);
+  }
 
   _frameTime(loop, i) { return loop * this.dur + i * this.f.hop; }
   _evTime(loop, j) { return loop * this.dur + this.ev.time[j]; }
@@ -105,14 +120,14 @@ export class Timeline {
     }
     this._manual(T, emit);
     const lv = this.interp.step(f.voiceDb.subarray(i * NB, i * NB + NB), f.globalDb[i], f.hop, P.music);
-    this._finish(lv, f.hop);
+    this._finish(lv, f.hop, this.harmonyAt(i * f.hop));
     this.bandDb.set(f.bandDb.subarray(i * nb, i * nb + nb));
     this.latest = T; this.stats.frames++;
   }
 
   // ── live ──
   setLive(sr, hiSize, loSize) {
-    this.mode = 'live'; this.f = null;
+    this.mode = 'live'; this.f = null; this.harm = null;
     this.live = new LiveAnalyzer(sr, hiSize, loSize);
     this.live.setDetect(this.detectOpts(), 1 / 60);
     this.interp.reset(); clearResponse(); this.onReset?.();
@@ -144,9 +159,10 @@ export class Timeline {
       if (emit) this.onEvent?.({ id: `${this.epoch}:M${this.stats.frames}:${v}`, time: T, voice: v, strength: 1, manual: true });
     }
   }
-  _finish(lv, dt) {
+  _finish(lv, dt, shimmer = 0) {
     for (let k = 0; k < NB; k++) this.levels[k] = lv[k];
     if (P.manual.on) this.levels[P.manual.voice] = P.manual.level;      // manual test: after interpretation
-    stepResponse(this.levels, lv[NB], this.hits, dt);
+    if (P.manual.shimmer) shimmer = 1;                                    // manual test: full confidence
+    stepResponse(this.levels, lv[NB], this.hits, dt, shimmer);
   }
 }
