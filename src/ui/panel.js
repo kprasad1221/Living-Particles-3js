@@ -157,6 +157,25 @@ export function buildPanel(container, app) {
   sparkCtrls.push(kit.slider(sp, S, 'bright', { label: 'Brightness', min: 0, max: 5, step: 0.01, def: DS.bright }));
   kit.readout(sk, 'Alive · dropped', () => `${app.stats.sparks.toLocaleString()} · ${app.stats.dropped.toLocaleString()} (capacity 8,192)`, { tip: 'Dropped: still-living particles overwritten because the buffer was full (oldest first).' });
 
+  // ── Plume ──────────────────────────────────────────────────────────────────
+  const pl = kit.folder(root, 'Plume', { onReset: () => app.resetGroup('plume'), note: 'One authored gesture per hit on one voice: emerge, rise, curl, disperse, rest. Strength changes only the rise and the particle count.' });
+  const Pl = P.plume, DPl = D.plume;
+  kit.toggle(pl, Pl, 'on', { label: 'On' });
+  const plCtrls = [];
+  plCtrls.push(kit.select(pl, Pl, 'voice', { label: 'Launched by', options: VOICES, def: DPl.voice }));
+  plCtrls.push(kit.slider(pl, Pl, 'area', { label: 'Launch area', min: 0, max: 90, step: 1, unit: 'u', def: DPl.area, tip: 'Radius around the centre a plume may start in (0 = anywhere). While the pointer touches the floor, plumes start under it.' }));
+  plCtrls.push(kit.slider(pl, Pl, 'perHit', { label: 'Particles per plume', min: 10, max: 400, step: 1, def: DPl.perHit }));
+  plCtrls.push(kit.slider(pl, Pl, 'maxConcurrent', { label: 'At most at once', min: 1, max: 12, step: 1, def: DPl.maxConcurrent, tip: 'A hit beyond this is dropped (counted below), so fast hits never pile up.' }));
+  plCtrls.push(kit.slider(pl, Pl, 'length', { label: 'Gesture length', min: 0.4, max: 5, step: 0.05, unit: 's', def: DPl.length }));
+  plCtrls.push(kit.slider(pl, Pl, 'height', { label: 'Rise', min: 0, max: 30, step: 0.1, unit: 'u', def: DPl.height }));
+  plCtrls.push(kit.slider(pl, Pl, 'curl', { label: 'Curl', min: 0, max: 4, step: 0.05, unit: 'turns', def: DPl.curl }));
+  plCtrls.push(kit.slider(pl, Pl, 'spread', { label: 'Spread', min: 0, max: 12, step: 0.1, unit: 'u', def: DPl.spread }));
+  plCtrls.push(kit.slider(pl, Pl, 'drift', { label: 'Drift', min: 0, max: 10, step: 0.1, unit: 'u', def: DPl.drift }));
+  plCtrls.push(kit.slider(pl, Pl, 'size', { label: 'Particle size', min: 0.05, max: 2, step: 0.01, unit: 'u', def: DPl.size }));
+  plCtrls.push(kit.slider(pl, Pl, 'trail', { label: 'Trail ghosts', min: 0, max: 6, step: 1, def: DPl.trail }));
+  plCtrls.push(kit.slider(pl, Pl, 'trailGap', { label: 'Trail spacing', min: 5, max: 200, step: 1, unit: 'ms', def: DPl.trailGap }));
+  kit.readout(pl, 'Plumes · dropped', () => `${app.sparks.stats.plumes} · ${app.sparks.stats.plumesDropped}`, { tip: 'Dropped: hits that arrived while the maximum number of plumes was alive.' });
+
   // ── Music response ─────────────────────────────────────────────────────────
   const mu = kit.folder(root, 'Music response', { note: 'One mapping at a time: a musical source → a visual destination. The meters under the floor show the inspected mapping: measured, processed, output. Frequency bands are ranges, not instruments.' });
   kit.select(mu, P.inspect, 'dest', { label: 'Inspect mapping', options: DEST, onChange: () => showMapping() });
@@ -235,6 +254,7 @@ export function buildPanel(container, app) {
 
   // ── Scenes and performance ─────────────────────────────────────────────────
   const sc = kit.folder(root, 'Scenes and performance');
+  kit.button(sc, 'Load the Plume phrase scene', () => app.loadPlumeScene(), { tip: 'A composed starting point: bass hits launch plumes, sparse high sparks, quiet regions, slow colour change.' });
   kit.button(sc, 'Restore last saved scene', () => app.restoreSaved(), { tip: 'The scene last saved to (or recalled from) a track.' });
   kit.button(sc, 'Export scene (JSON)', () => app.exportScene());
   kit.button(sc, 'Import scene (JSON)', () => app.importScene(), { tip: 'Checked on import: unknown keys ignored, numbers must be finite, ranges enforced.' });
@@ -252,6 +272,7 @@ export function buildPanel(container, app) {
     cAdapt.setInactive(Mu.normalize !== 'adaptive' ? 'Preserve dynamics mode' : '');
     for (const c of ptr) c.setInactive(!Pt.on ? 'Pointer is off' : solo !== 'none' ? 'Solo response hides the pointer' : '');
     cOrbit.setInactive(Pt.mode !== 'orbit' ? 'Driven by the pointer' : '');
+    for (const c of plCtrls) c.setInactive(!Pl.on ? 'Plume is off' : soloOther('sparks'));
     morph.setInactive(P.looks.preview !== 'mix' ? `Previewing ${P.looks.preview.toUpperCase()}` : P.looks.drive !== 'hand' ? `Moved by ${P.looks.drive === 'lfo' ? 'the LFO' : 'a voice'}` : '');
   };
 

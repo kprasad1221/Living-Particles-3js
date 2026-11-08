@@ -116,6 +116,25 @@ export const P = {
     bright: 1.4,
   },
 
+  // PLUME — one authored gesture per hit on a chosen voice: emerge, rise, curl, disperse, rest.
+  // Starting timings (at length 1.6 s): 0–80 ms emerge · 80–250 ms rise · 250–900 ms curl · 900–1600 ms fade.
+  plume: {
+    on: false,
+    voice: 1,              // which voice's hits launch a plume (1 = bass)
+    area: 14,              // launch from a tile of that voice within this radius of the centre (scene units);
+                           // while the pointer is on the floor, from the tile nearest the pointer
+    perHit: 160,           // particles per plume (× hit strength, within 0.6–1)
+    maxConcurrent: 4,      // plumes alive at once; a hit beyond this is dropped and counted
+    length: 1.6,           // whole gesture, s
+    height: 10,            // rise, scene units (× 0.7–1 with hit strength)
+    curl: 1.1,             // turns around the plume axis during the curl phase
+    spread: 3.2,           // radius reached by the end, scene units
+    drift: 1.5,            // sideways travel over the gesture, scene units
+    trail: 3,              // ghost copies following each particle (0 = none)
+    trailGap: 40,          // ms between ghosts
+    size: 0.5,             // particle size, scene units (independent of spark size)
+  },
+
   // PERFORMANCE MACROS — each scales exactly one thing, nothing else.
   macros: {
     movement: 1,           // × maximum lift

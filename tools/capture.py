@@ -7,6 +7,7 @@ virtual audio clock (sources.virtual), so every shot and check is repeatable.
   python capture.py diag av2p              # composite / no glow / glow only / emission / surfaces
   python capture.py motion av2 av2p        # orbiting-camera clips, side by side
   python capture.py ui                     # interface at 1440, 820 and 390 px
+  python capture.py phrase                 # matched rest/attack/crest/release on the composed excerpt
 
 Waveform fixtures (no browser): node tools/fixtures.mjs
 """
@@ -238,9 +239,72 @@ async def check():
     print(json.dumps(res, indent=1))
     with open(os.path.join(OUT, 'check.json'), 'w') as f: json.dump(res, f, indent=2)
 
+async def phrase():
+    """Matched before/after on the composed 20 s excerpt (tools/phrase_excerpt.py): rest, attack,
+    crest and release at the same audio times, Stand view (plus Survey at the crest).
+    Baseline = Study 01 response with the AV2 look; revision = the Plume phrase scene."""
+    from phrase_excerpt import write, MOMENTS
+    wav = write(os.path.join(OUT, 'phrase_excerpt.wav'))
+    async with async_playwright() as p:
+        b = await launch(p); page, logs = await boot(b)
+        await page.set_input_files('#fileInput', wav)
+        for _ in range(240):
+            if await page.evaluate("window.__lp.sources.mode === 'track' && window.__lp.ready()"): break
+            await page.evaluate('window.__fake.step(16.6667)'); await page.wait_for_timeout(100)
+        res = {'ready': await page.evaluate("window.__lp.ready()"), 'source': await page.evaluate("document.getElementById('nowPlaying').textContent")}
+        await page.evaluate("document.body.classList.add('perform'); document.querySelector('.toggles').style.visibility='hidden'")
+        configs = {
+          'baseline': "lp.app.resetScene(); lp.app.loadLook('a', 'av2'); lp.P.looks.preview = 'a';",
+          'revision': "lp.app.loadPlumeScene(); lp.P.looks.preview = 'a';",
+        }
+        shots = []
+        for name, js in configs.items():
+            await page.evaluate(f"() => {{ const lp = window.__lp; {js} lp.P.pointer.on = false; lp.sparks.seed = 1; }}")
+            for label, t in MOMENTS.items():
+                for cam in (['stand', 'survey'] if label == 'crest' else ['stand']):
+                    await page.evaluate(f"window.__lp.goTo('{cam}')")
+                    await play_to(page, t, max(0.0, t - 2.5))
+                    for _ in range(2): await page.evaluate('window.__fake.step(16.6667)')
+                    await page.wait_for_timeout(150)
+                    out = os.path.join(OUT, f'phrase_{name}_{label}_{cam}.png'); await page.screenshot(path=out); shots.append(out)
+                    res[f'{name}_{label}_{cam}'] = await page.evaluate("() => { const s = window.__lp.sparks.stats; return { plumes: s.plumes, plumesDropped: s.plumesDropped, alive: window.__lp.sparks.countAlive ? window.__lp.sparks.countAlive(window.__lp.sparks.now) : null }; }")
+        # One plume, frame by frame: the attack at 4.0 s launches it; read its scheduled birth.
+        # At most one plume at a time here, so the following kicks don't overlap the gesture.
+        await page.evaluate("window.__lp.goTo('stand'); window.__lp.P.plume.maxConcurrent = 1")
+        await play_to(page, 4.0, 3.0)
+        await play_to(page, 4.05)
+        birth = await page.evaluate("""() => { const sp = window.__lp.sparks, s = sp.start.array, m = sp.meta.array; let b = Infinity;
+          for (let i = 0; i < s.length / 4; i++) if (m[i * 4 + 2] > 0.5 && s[i * 4 + 3] > 3.9 && s[i * 4 + 3] < b) b = s[i * 4 + 3]; return b; }""")
+        res['plume_birth'] = birth
+        strip = []
+        from PIL import Image, ImageDraw
+        for ms, phase in [(40, 'emerge'), (180, 'rise'), (450, 'curl'), (850, 'curl'), (1300, 'disperse'), (1750, 'rest')]:
+            await play_to(page, birth + ms / 1000)
+            for _ in range(2): await page.evaluate('window.__fake.step(16.6667)')
+            await page.wait_for_timeout(120)
+            f = os.path.join(OUT, f'plume_{ms:04d}.png'); await page.screenshot(path=f); strip.append((f, f'+{ms} ms · {phase}'))
+        tw, th = 480, 300
+        sheet = Image.new('RGB', (tw * 3, th * 2)); d = ImageDraw.Draw(sheet)
+        for k, (f, label) in enumerate(strip):
+            im = Image.open(f).convert('RGB').resize((tw, th)); x, y = (k % 3) * tw, (k // 3) * th
+            sheet.paste(im, (x, y)); d.text((x + 8, y + 6), label, fill=(255, 255, 255))
+        sheet.save(os.path.join(OUT, 'plume_phrase_strip.jpg'), quality=86)
+        rows = ['rest_stand', 'attack_stand', 'crest_stand', 'crest_survey', 'release_stand']
+        sheet = Image.new('RGB', (tw * 2, th * len(rows))); d = ImageDraw.Draw(sheet)
+        for r, row in enumerate(rows):
+            for c, cfg in enumerate(['baseline', 'revision']):
+                im = Image.open(os.path.join(OUT, f'phrase_{cfg}_{row}.png')).convert('RGB').resize((tw, th))
+                sheet.paste(im, (c * tw, r * th)); d.text((c * tw + 8, r * th + 6), f'{cfg} · {row.replace("_", " · ")} · {MOMENTS[row.split("_")[0]]:.2f} s', fill=(255, 255, 255))
+        sheet.save(os.path.join(OUT, 'phrase_baseline_vs_revision.jpg'), quality=86)
+        res['errors'] = [l for l in logs if l.startswith('[error]') or l.startswith('[pageerror]')]
+        await b.close()
+    print(json.dumps(res, indent=1))
+    with open(os.path.join(OUT, 'phrase.json'), 'w') as f: json.dump(res, f, indent=2)
+
 if __name__ == '__main__':
     args = sys.argv[1:]
     if args == ['check']: asyncio.run(check())
+    elif args == ['phrase']: asyncio.run(phrase())
     elif args == ['ui']: asyncio.run(ui_views())
     elif args[:1] == ['diag']: asyncio.run(diag_views(*(args[1:2] or ['av2p'])))
     elif args[:1] == ['motion']: asyncio.run(motion(tuple(args[1:3]) if len(args) >= 3 else ('av2', 'av2p')))

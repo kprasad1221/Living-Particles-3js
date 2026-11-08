@@ -1,0 +1,141 @@
+{
+  "ready": true,
+  "analysis": {
+    "analysisVersion": "lp-analysis-1",
+    "sampleRate": 44100,
+    "duration": 16,
+    "bandWin": 4096,
+    "bandHop": 512,
+    "fastWin": 1024,
+    "fastHop": 256,
+    "timing": "window-centre",
+    "analysisMs": 350.5
+  },
+  "render_rate_invariance": {
+    "histDiff": [
+      0.0,
+      0.0
+    ],
+    "events": [
+      218,
+      218,
+      218
+    ],
+    "sameEventIdsAndTimes": true,
+    "sparkBirthsDiff": [
+      0.0,
+      0.0
+    ],
+    "emitted": [
+      3951,
+      3951,
+      3951
+    ],
+    "pass": true
+  },
+  "two_loops": {
+    "eventsInSource": 701,
+    "eventsPerLoop": [
+      701,
+      701,
+      41
+    ],
+    "total": 1443,
+    "unique": true,
+    "loop0First": true,
+    "loop0Last": true,
+    "loop1First": true,
+    "loop1Last": true,
+    "pass": true
+  },
+  "seek_back": {
+    "epochBefore": 5,
+    "epochAfter": 6,
+    "aliveAfterSeek": 0,
+    "historyRows": 260,
+    "pass": true
+  },
+  "manual_step_rise": {
+    "setMs": 200,
+    "measuredMs": 208.98,
+    "updateIntervalMs": 11.61,
+    "pass": true
+  },
+  "silence_after_busy": {
+    "eventsIn4sBusy": 170,
+    "eventsFrom4_3to9_5s": 0,
+    "liftAt4s": [
+      0.824,
+      0.409,
+      0.634,
+      0.404,
+      0.059,
+      0.162,
+      0.271,
+      0.176,
+      0.861
+    ],
+    "liftAt9_5s": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "gatesOpenInSilence": 0,
+    "pass": true
+  },
+  "single_hit_budget": {
+    "perHit": 40,
+    "emittedBy0_2s": 40,
+    "emittedBy1_5s": 40,
+    "firstBirth": 10.1451,
+    "lastBirth": 13.0155,
+    "edgeDelayS": 3.567,
+    "pass": true
+  },
+  "spark_origin_on_surface": {
+    "sparks": 40,
+    "worstErrorUnits": 0,
+    "largestSwellPlusPointerUnits": 2.46,
+    "note": "origins include sub swell and pointer lift; CPU tile state mirrors the vertex shader term for term (not a GPU read-back)",
+    "pass": true
+  },
+  "counts": {
+    "tiles": 7471,
+    "calls": 21,
+    "tris": 269932
+  },
+  "migration_v1": {
+    "schema": 5,
+    "rings": 40,
+    "active": 0.5,
+    "variation": 0.3,
+    "lift": 2.7,
+    "ripple": "instant",
+    "rimSource": 3,
+    "liftRiseMs": 39.9,
+    "liftFallMs": 797.3,
+    "pointerRadius": 12,
+    "perHit": 40,
+    "continuous": 5,
+    "lookAv0": "#123456",
+    "lookArestRim": 0.825,
+    "morph": 0.25
+  },
+  "import_validation": {
+    "floor": 0.9,
+    "ceil": 0.92,
+    "life": 0.05,
+    "rings": 96,
+    "reference": -6,
+    "perHit": 400,
+    "restRim": 0.8250000000000001,
+    "pass": true
+  },
+  "errors": []
+}

@@ -1,0 +1,56 @@
+{
+  "ready": true,
+  "source": "phrase_excerpt \u00b7 precise",
+  "baseline_rest_stand": {
+    "plumes": 0,
+    "plumesDropped": 0,
+    "alive": 0
+  },
+  "baseline_attack_stand": {
+    "plumes": 0,
+    "plumesDropped": 0,
+    "alive": 2
+  },
+  "baseline_crest_stand": {
+    "plumes": 0,
+    "plumesDropped": 0,
+    "alive": 586
+  },
+  "baseline_crest_survey": {
+    "plumes": 0,
+    "plumesDropped": 0,
+    "alive": 586
+  },
+  "baseline_release_stand": {
+    "plumes": 0,
+    "plumesDropped": 0,
+    "alive": 597
+  },
+  "revision_rest_stand": {
+    "plumes": 0,
+    "plumesDropped": 0,
+    "alive": 0
+  },
+  "revision_attack_stand": {
+    "plumes": 1,
+    "plumesDropped": 0,
+    "alive": 640
+  },
+  "revision_crest_stand": {
+    "plumes": 4,
+    "plumesDropped": 1,
+    "alive": 2033
+  },
+  "revision_crest_survey": {
+    "plumes": 4,
+    "plumesDropped": 1,
+    "alive": 2033
+  },
+  "revision_release_stand": {
+    "plumes": 3,
+    "plumesDropped": 0,
+    "alive": 829
+  },
+  "plume_birth": 4.2486491203308105,
+  "errors": []
+}

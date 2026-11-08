@@ -280,6 +280,20 @@ app.resetGroup = g => {
   panel?.refresh(); strip?.refresh(); autosave();
 };
 app.restoreSaved = () => { if (app.lastSaved) applyScene(app.lastSaved); };
+// The Plume phrase: a composed starting point (spec §7) — weight from the low end, a clear
+// plume on bass hits, sparse high sparks as counterpoint, slow colour change, dark regions.
+app.loadPlumeScene = () => {
+  const d = JSON.parse(JSON.stringify(DEFAULTS));
+  Object.assign(d.floor, { active: 0.45, variation: 0.85, scatter: 0.1 });
+  Object.assign(d.movement, { lift: 1.3, swell: 0.9, travel: 30 });
+  Object.assign(d.map.rim, { source: 0, fall: 900 });
+  Object.assign(d.map.colour, { source: 8, amount: 0.35, rise: 3000, fall: 6000 });
+  Object.assign(d.sparks, { perHit: 10, from: 'highs', continuous: 0, life: 0.9, size: 0.22 });
+  Object.assign(d.plume, { on: true, voice: 1 });
+  const lookA = { ...LOOKS.nocturne, restRim: 0.35, rimBreath: 0.9, fill: 0.5, bloom: 0.55, bloomThreshold: 0.7, bloomSky: 0, hitWhiten: 0.2, name: 'Nocturne · plume' };
+  applyScene({ ...header(), ...d, looks: { ...d.looks, a: 'nocturne', b: 'av2p', morph: 0, lookA, lookB: LOOKS.av2p } });
+  stage.goTo('stand');
+};
 app.snapshot = snapshot;
 
 // ── Library + transport ─────────────────────────────────────────────────────
