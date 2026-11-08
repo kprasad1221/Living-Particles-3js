@@ -14,7 +14,8 @@ import { P, VERSION, BINS, LOW_FFT_SIZE, NB, VOICE_NAMES } from './params.js';
 import { LOOKS, cloneLook, mixLooks, sanitizeLook } from './looks.js';
 import { FixedClock, SIM_DT } from './clock.js';
 import { Sources } from './audio.js';
-import { bands, cookBands, depositBands, clearBands } from './bands.js';
+import { bands, cookBands, depositBands, clearBands, applyManual, fireManualHit } from './bands.js';
+import { SAVED_GROUPS, migrate, assignGroup, validate, header } from './scene.js';
 import { HexField } from './world/hexfield.js';
 import { Sparks } from './world/sparks.js';
 import { Stage } from './world/stage.js';
@@ -66,6 +67,7 @@ function simStep() {
   sources.read(bins);
   const hasLow = sources.readLow(lowBins);
   cookBands(bins, sources.mode === 'test' ? 46.875 : sources.binHz, hasLow ? lowBins : null, sources.lowBinHz);
+  applyManual();
   depositBands();
   sources.advance(SIM_DT);
   state.simTime += SIM_DT;
@@ -101,36 +103,38 @@ function updateMorph(dt) {
 }
 
 // ── Scenes ──────────────────────────────────────────────────────────────────
-const GROUPS = ['spawn', 'init', 'update', 'voices', 'affector', 'sparks', 'camera', 'render'];
 function snapshot() {
-  const s = { version: VERSION, saved: new Date().toISOString() };
-  for (const g of GROUPS) s[g] = { ...P[g] };
+  const s = header();
+  for (const g of SAVED_GROUPS()) s[g] = JSON.parse(JSON.stringify(P[g]));
   s.view = { pos: stage.camera.position.toArray(), target: stage.controls.target.toArray() };
-  s.looks = { ...P.looks, lookA: cloneLook(app.lookA), lookB: cloneLook(app.lookB) };
+  const { preview, ...looks } = P.looks;                 // preview is an audition, never saved
+  s.looks = { ...looks, lookA: cloneLook(app.lookA), lookB: cloneLook(app.lookB) };
   return s;
 }
-function applyScene(s, { fly = true } = {}) {
-  if (!s || typeof s !== 'object') return;
+function applyScene(input, { fly = true } = {}) {
+  const s = migrate(input);
+  if (!s) return false;
   const spawnBefore = JSON.stringify(P.spawn);
-  for (const g of GROUPS) {
-    if (!s[g]) continue;
-    for (const k of Object.keys(P[g])) if (typeof s[g][k] === typeof P[g][k]) P[g][k] = s[g][k];
-  }
+  for (const g of SAVED_GROUPS()) assignGroup(P[g], s[g]);
   if (s.looks) {
     for (const k of ['a', 'b', 'morph', 'drive', 'edit']) if (typeof s.looks[k] === typeof P.looks[k]) P.looks[k] = s.looks[k];
     Object.assign(app.lookA, sanitizeLook(s.looks.lookA, app.lookA));
     Object.assign(app.lookB, sanitizeLook(s.looks.lookB, app.lookB));
     state.voiceMorph = P.looks.morph;
   }
+  validate();
   if (JSON.stringify(P.spawn) !== spawnBefore) app.rebuild();
-  if (s.view?.pos && s.view?.target) {
+  if (s.view?.pos && s.view?.target && [...s.view.pos, ...s.view.target].every(Number.isFinite)) {
     const to = { pos: new THREE.Vector3(...s.view.pos), target: new THREE.Vector3(...s.view.target) };
     if (fly) stage.flight = { from: { pos: stage.camera.position.clone(), target: stage.controls.target.clone() }, to, t: 0 };
     else { stage.camera.position.copy(to.pos); stage.controls.target.copy(to.target); stage.controls.update(); }
   }
   stage.resize(innerWidth, innerHeight);
   panel?.refresh();
+  return true;
 }
+// Saved per-track scenes are migrated once at load; re-saving writes the new schema.
+for (const [name, sc] of Object.entries(app.scenes)) { const m = migrate(sc); if (m) app.scenes[name] = m; else delete app.scenes[name]; }
 let saveTimer = 0;
 function autosave() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set('lp.current', snapshot()), 400); }
 
@@ -217,7 +221,8 @@ $('saveSceneBtn').addEventListener('click', () => {
   $('saveSceneBtn').textContent = 'Saved ✓';
   setTimeout(() => { $('saveSceneBtn').textContent = 'Save scene to this track'; }, 1400);
 });
-app.restart = () => { sources.seekStart(); clearBands(); sparks.clear(); state.simTime = 0; clock.reset(); };
+app.restart = () => { sources.seekStart(); clearBands(); sparks.clear(); sparks.reseed(P.spawn.seed); state.simTime = 0; clock.reset(); };
+app.fireHit = () => fireManualHit(P.manual.voice);
 
 // Files: the drop zone, the whole window, and the file picker.
 $('fileInput').addEventListener('change', async e => {
@@ -321,7 +326,7 @@ function draw(dt) {
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 const saved = store.get('lp.current', null);
-if (saved && saved.version === VERSION) applyScene(saved, { fly: false });
+if (saved) applyScene(saved, { fly: false });
 app.resize();
 addEventListener('resize', app.resize);
 library.init().then(setSourceButtons);

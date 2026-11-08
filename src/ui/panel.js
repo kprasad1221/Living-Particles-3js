@@ -139,6 +139,14 @@ export function buildPanel(container, app) {
   fv.addBinding(P.voices, 'releaseHigh', { label: 'release, air (s)', min: 0.02, max: 2, step: 0.01 });
   fv.addBinding(P.voices, 'onset', { label: 'onset threshold', min: 1, max: 5, step: 0.05 });
 
+  // ── Diagnostics (never saved) ──────────────────────────────────────────────
+  const fd = pane.addFolder({ title: 'Diagnostics · not saved', expanded: false });
+  fd.addBinding(P.diag, 'view', { label: 'view', options: { composite: 'normal', 'no bloom': 'nobloom', 'bloom only': 'bloom', 'emission only': 'emission', 'surface only': 'surface' } });
+  fd.addBinding(P.manual, 'on', { label: 'manual level' });
+  fd.addBinding(P.manual, 'voice', { label: 'manual voice', options: voiceOpts });
+  fd.addBinding(P.manual, 'level', { label: 'level', min: 0, max: 1, step: 0.01 });
+  fd.addButton({ title: 'Fire one manual hit' }).on('click', () => app.fireHit());
+
   // ── Camera, render, scenes ────────────────────────────────────────────────
   const fc = pane.addFolder({ title: 'Camera · render · scenes', expanded: false });
   fc.addBinding(P.camera, 'drift', { label: 'drift' });

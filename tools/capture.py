@@ -66,6 +66,14 @@ async def check():
         res['scene_roundtrip'] = await page.evaluate("""() => { const lp = window.__lp; const a = JSON.stringify(lp.snapshot().looks);
           lp.app.loadLook('a', 'nocturne'); lp.applyScene(JSON.parse(JSON.stringify({ ...lp.snapshot(), looks: JSON.parse(a) })), { fly: false });
           return JSON.stringify(lp.snapshot().looks) === a; }""")
+        # Migration: a study-01/0.1.0 save (no schema field) with edited values loads and keeps them.
+        res['migration_v1'] = await page.evaluate("""() => { const lp = window.__lp; const v1 = JSON.parse(JSON.stringify(lp.snapshot()));
+          delete v1.schema; v1.version = 'study-01/0.1.0'; v1.update.extrude = 2.7; v1.looks.lookA.rim = '#123456'; v1.diag = { view: 'bloom' };
+          lp.applyScene(v1, { fly: false }); const now = lp.snapshot();
+          return { extrude: now.update.extrude, rim: now.looks.lookA.rim, schema: now.schema, diagSaved: 'diag' in now, diagView: lp.P.diag.view }; }""")
+        # Manual hit reaches the history after the detector.
+        res['manual_hit'] = await page.evaluate("""() => { const lp = window.__lp; lp.restart(); lp.P.manual.on = true; lp.P.manual.voice = 3; lp.P.manual.level = 0.5;
+          lp.app.fireHit(); lp.stepSim(1); const r = [lp.bands.hist[3 * 4], lp.bands.hist[3 * 4 + 1]]; lp.P.manual.on = false; return r; }""")
         # Capacity rebuild.
         res['rebuild'] = await page.evaluate("() => { const lp = window.__lp; lp.P.spawn.rings = 30; lp.app.rebuild(); const n = lp.app.stats.tiles; lp.P.spawn.rings = 52; lp.app.rebuild(); return [n, lp.app.stats.tiles]; }")
         await frames(page, 2)
@@ -74,6 +82,18 @@ async def check():
     print(json.dumps(res, indent=2))
     with open(os.path.join(OUT, 'check.json'), 'w') as f: json.dump(res, f, indent=2)
 
+
+async def diag_views():
+    """The four diagnostic views of one moment."""
+    async with async_playwright() as p:
+        b = await launch(p)
+        page, logs, ok = await open_app(b)
+        for view in ['normal', 'nobloom', 'bloom', 'emission', 'surface']:
+            await shot(page, 'av2', 'stand', extra=f"lp.P.diag.view = '{view}';", name=f'diag_{view}.png', clean=True)
+        await page.evaluate("window.__lp.P.diag.view = 'normal'")
+        errs = [l for l in logs if l.startswith('[error]') or l.startswith('[pageerror]')]
+        print('console errors:', len(errs)); print('\n'.join(errs[:10]))
+        await b.close()
 
 async def ui_views():
     """The interface at desktop, tablet and phone widths."""
@@ -93,4 +113,5 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     if args == ['check']: asyncio.run(check())
     elif args == ['ui']: asyncio.run(ui_views())
+    elif args == ['diag']: asyncio.run(diag_views())
     else: asyncio.run(captures(args or DEFAULT))

@@ -78,6 +78,15 @@ export function cookBands(hi, hiHz, low, lowHz) {
   bands.started = true;
 }
 
+// Manual test: override one voice's level and fire single hits after the detector.
+let pendingHit = -1;
+export function fireManualHit(voice) { pendingHit = voice; }
+export function applyManual() {
+  const M = P.manual;
+  if (M.on) { const k = M.voice; bands.level[k] = M.level; bands.norm[k] = M.level; }
+  if (pendingHit >= 0) { bands.onset[pendingHit] = 1; bands.hit[pendingHit] = 1; pendingHit = -1; }
+}
+
 // Push the present into row 0; everything else moves one row older.
 export function depositBands() {
   const row = NB * 4;

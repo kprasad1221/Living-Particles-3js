@@ -15,7 +15,7 @@
 //  are written once into instanced buffers when the field is built.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const VERSION = 'study-01/0.1.0';
+export const VERSION = 'study-01/0.2.0';
 
 export const SIM_HZ = 60;          // fixed simulation clock (analysis + history), as in Audio Geology
 export const NB = 8;               // voices
@@ -99,6 +99,13 @@ export const P = {
 
   camera: { drift: false, driftSpeed: 0.25, fov: 55 },
   render: { scale: 1, toneMapping: 'neutral' },
+
+  // ── Transient: never saved in a scene ──────────────────────────────────────
+  // Diagnostic view: normal | nobloom | bloom (bloom contribution only) | emission | surface
+  diag: { view: 'normal' },
+  // Manual test: inject a known level and single hits after the detector, so shader
+  // behaviour can be checked separately from audio detection.
+  manual: { on: false, voice: 1, level: 0.8 },
 };
 
 // The shape of a look (Output context). Numbers and colours only, so two looks can be mixed.

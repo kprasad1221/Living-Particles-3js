@@ -3,7 +3,15 @@
 //
 //  Post chain (TouchDesigner: Render TOP → Bloom/Glow TOPs → Out TOP; Unity: the
 //  post-processing volume with Bloom):
-//    RenderPass (half-float, 4× MSAA) → UnrealBloomPass → OutputPass (tone map + sRGB)
+//    RenderPass (half-float, 4× MSAA) → SavePass (keeps the scene before bloom)
+//      → UnrealBloomPass → Diagnostic pass → OutputPass (tone map + sRGB, once)
+//
+//  Diagnostic views (Light → diagnostics, never saved):
+//    normal    the composite
+//    nobloom   bloom pass disabled
+//    bloom     bloom contribution only: composite − saved scene (bloom adds onto the scene)
+//    emission  only emitted light (rims, fills, flashes, sparks), no surfaces, sky or bloom
+//    surface   only lit surfaces and fog, no emission or bloom
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -11,6 +19,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SavePass } from 'three/addons/postprocessing/SavePass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { P } from '../params.js';
 
 const skyVertex = /* glsl */`
@@ -62,8 +72,20 @@ export class Stage {
     const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.save = new SavePass(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false }));
+    this.composer.addPass(this.save);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 1, 0.4, 0.2);
     this.composer.addPass(this.bloom);
+    this.diagPass = new ShaderPass({
+      uniforms: { tDiffuse: { value: null }, tScene: { value: this.save.renderTarget.texture }, uMode: { value: 0 } },
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform sampler2D tDiffuse, tScene; uniform float uMode; varying vec2 vUv;
+        void main() { vec4 c = texture2D(tDiffuse, vUv);
+          if (uMode > 0.5) c.rgb = max(c.rgb - texture2D(tScene, vUv).rgb, 0.0);
+          gl_FragColor = c; }`,
+    });
+    this.diagPass.uniforms.tScene.value = this.save.renderTarget.texture;   // ShaderPass clones uniforms: re-link
+    this.composer.addPass(this.diagPass);
     this.composer.addPass(new OutputPass());
 
     this.size = { w: 1, h: 1, dpr: 1 };
@@ -96,6 +118,7 @@ export class Stage {
     this.renderer.setSize(w, h, false);
     this.composer.setPixelRatio(dpr);
     this.composer.setSize(w, h);
+    this.save.renderTarget.setSize(Math.round(w * dpr), Math.round(h * dpr));
     this.camera.aspect = w / Math.max(h, 1);
     this.camera.updateProjectionMatrix();
   }
@@ -137,8 +160,11 @@ export class Stage {
     }
     a.on += (want - a.on) * (1 - Math.exp(-dt * (want ? 8 : 2.5)));
 
-    const s = this.sky.material.uniforms;
+    const s = this.sky.material.uniforms, view = P.diag.view;
     s.uTop.value.copy(look.skyTop); s.uHorizon.value.copy(look.horizon); s.uGlow.value = look.horizonGlow;
+    this.sky.visible = view !== 'emission';
+    this.bloom.enabled = view === 'normal' || view === 'bloom';
+    this.diagPass.uniforms.uMode.value = view === 'bloom' ? 1 : 0;
     this.bloom.strength = look.bloom; this.bloom.radius = look.bloomRadius; this.bloom.threshold = look.bloomThreshold;
     const tm = { aces: THREE.ACESFilmicToneMapping, agx: THREE.AgXToneMapping, neutral: THREE.NeutralToneMapping, none: THREE.NoToneMapping };
     this.renderer.toneMapping = tm[P.render.toneMapping] ?? THREE.ACESFilmicToneMapping;

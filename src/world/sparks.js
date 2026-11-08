@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { NB, P } from '../params.js';
 import { histAt, bands } from '../bands.js';
+import { mulberry32 } from './hexfield.js';
 
 export const CAPACITY = 8192;
 
@@ -79,7 +80,7 @@ export class Sparks {
     this.points = new THREE.Points(g, this.material);
     this.points.frustumCulled = false;
     this.cursor = 0; this.lo = Infinity; this.hi = -1;   // dirty range this frame
-    this.rand = Math.random;
+    this.reseed(1);
     this.steady = new Float32Array(NB);                   // shimmer accumulators
     this.alive = 0; this.spawned = 0;
   }
@@ -141,6 +142,9 @@ export class Sparks {
     this.lo = Infinity; this.hi = -1;
   }
 
+  // Reproducible emission: the same seed and the same music give the same sparks.
+  reseed(seed) { this.rand = mulberry32((seed * 2654435761) >>> 0); }
+
   clear() {
     for (let i = 0; i < CAPACITY; i++) this.start.array[i * 4 + 3] = -1e6;
     this.start.clearUpdateRanges(); this.start.needsUpdate = true;
@@ -152,7 +156,7 @@ export class Sparks {
     u.uTime.value = time; u.uGravity.value = S.gravity; u.uTurb.value = S.turbulence;
     u.uSize.value = S.size; u.uPixel.value = pixel; u.uBright.value = S.bright;
     for (let k = 0; k < NB; k++) u.uPalette.value[k].copy(look['v' + k]);
-    this.points.visible = S.on;
+    this.points.visible = S.on && P.diag.view !== 'surface';
     this.flush();
   }
 

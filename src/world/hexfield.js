@@ -141,6 +141,7 @@ const vertexShader = /* glsl */`
 const fragmentShader = /* glsl */`
   uniform vec3 uRim, uFace, uSide, uFogColor, uAffColor;
   uniform float uRimWidth, uRimGlow, uRimPulse, uFillGlow, uFillCore, uSideGlow, uEdgeLines, uGrain, uFlash, uFog, uAffTint;
+  uniform float uDiag;          // 0 normal · 1 emission only · 2 surface only
 
   varying vec2 vLocal;
   varying float vY, vTop, vAct, vOnset, vPulse, vAff, vHeight;
@@ -167,8 +168,8 @@ const fragmentShader = /* glsl */`
     float g = uGrain * (vnoise(vWorld.xz * 3.1) * 0.6 + vnoise(vWorld.xz * 11.0) * 0.4 - 0.5);
     vec3 face = uFace * (1.0 + 2.0 * g);
     vec3 fill = vColor * vAct * uFillGlow * mix(inner, 0.55 + 0.45 * inner, uFillCore);
-    vec3 topCol = face + fill + rimCol * (rim * rimI + inner * 0.18 * rimI);
-    topCol += vec3(1.0) * vOnset * uFlash * 0.35 * rim;            // white-hot flash on hits
+    vec3 topEmit = fill + rimCol * (rim * rimI + inner * 0.18 * rimI)
+                 + vec3(1.0) * vOnset * uFlash * 0.35 * rim;          // white-hot flash on hits
 
     // Sides: flat-shaded stone, the voice glowing down from the top edge.
     vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
@@ -178,16 +179,21 @@ const fragmentShader = /* glsl */`
     float ang = atan(vLocal.x, vLocal.y) / 1.0471976;                // 60° segments
     float fa = abs(fract(ang + 0.5) - 0.5);
     float corner = 1.0 - smoothstep(0.0, fwidth(ang) * 1.5 + 0.02, fa);
-    vec3 sideCol = uSide * lit * (0.5 + 0.5 * vY)
-      + vColor * grad * vAct * uSideGlow
+    vec3 sideBase = uSide * lit * (0.5 + 0.5 * vY);
+    vec3 sideEmit = vColor * grad * vAct * uSideGlow
       + rimCol * topLine * rimI * 0.8
       + rimCol * corner * uEdgeLines * (0.25 + vAct) * rimI * 0.5;
 
-    vec3 col = mix(sideCol, topCol, vTop);
-    col += uAffColor * vAff * uAffTint * (0.25 + rim * vTop + topLine * (1.0 - vTop));
+    vec3 base = mix(sideBase, face, vTop);
+    vec3 emit = mix(sideEmit, topEmit, vTop)
+              + uAffColor * vAff * uAffTint * (0.25 + rim * vTop + topLine * (1.0 - vTop));
+    if (uDiag > 1.5) emit = vec3(0.0);
+    else if (uDiag > 0.5) base = vec3(0.0);
+    vec3 col = base + emit;
 
     float dist = length(vWorld.xz - cameraPosition.xz);           // ground distance: a high camera still sees a crisp floor
     float fog = 1.0 - exp(-pow(max(dist - 24.0, 0.0) * uFog, 1.5));   // clear near the viewer, haze toward the horizon
+    if (uDiag > 0.5 && uDiag < 1.5) { gl_FragColor = vec4(col * (1.0 - fog), 1.0); return; }
     gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
   }
 `;
@@ -215,6 +221,7 @@ export class HexField {
       uFogColor: { value: new THREE.Color() },
       uRimWidth: { value: 0.1 }, uRimGlow: { value: 1 }, uRimPulse: { value: 1 }, uFillGlow: { value: 1 }, uFillCore: { value: 0 },
       uSideGlow: { value: 1 }, uEdgeLines: { value: 0 }, uGrain: { value: 0 }, uFlash: { value: 1 }, uFog: { value: 0.01 },
+      uDiag: { value: 0 },
     };
     this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader, fragmentShader });
     this.mesh = null;
@@ -254,6 +261,7 @@ export class HexField {
     for (let k = 0; k < NB; k++) u.uPalette.value[k].copy(look['v' + k]);
     u.uRim.value.copy(look.rim); u.uFace.value.copy(look.face); u.uSide.value.copy(look.side);
     u.uFogColor.value.copy(look.horizon);
+    u.uDiag.value = { emission: 1, surface: 2 }[P.diag.view] || 0;
     for (const k of ['rimWidth', 'rimGlow', 'rimPulse', 'fillGlow', 'fillCore', 'sideGlow', 'edgeLines', 'grain', 'flash', 'fog'])
       u['u' + k[0].toUpperCase() + k.slice(1)].value = look[k];
   }
