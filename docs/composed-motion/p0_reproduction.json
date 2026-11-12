@@ -1,0 +1,65 @@
+{
+  "commit": "28e8c16446db2e34015a5be9e4773630cd6f3e8e",
+  "defect": "src/response.js line 78: the rim (b) and colour (a) history writes sat behind a line comment and never ran",
+  "isolated": {
+    "method": "real stepResponse + real three.js DataTexture under Node; full-scale input, instant rise, one update; voice 1",
+    "rimEnvelope": 1,
+    "colourEnvelope": 1,
+    "storedLift_r": 0.6168813109397888,
+    "storedRim_b": 0,
+    "storedColour_a": 0
+  },
+  "historyChecksOnThatCommit": "1 of 8 pass (only the texture-wrapping check); the 7 failures all name b (rim) or a (colour) reading 0",
+  "onScreen": {
+    "method": "tools/capture.py check, item 8: same audio time and camera, one mapping amount changed 0 \u2192 1, 960 \u00d7 600, software WebGL",
+    "before": {
+      "rim": {
+        "storedRim_b": 0,
+        "meanAbsDiff8bit": 0.0,
+        "meanLevelAmount0": 129.912,
+        "meanLevelAmount1": 129.912
+      },
+      "colour": {
+        "storedColour_a": 0,
+        "meanAbsDiff8bit": 0.0,
+        "meanRGBAmount0": [
+          123.0,
+          152.69,
+          184.15
+        ],
+        "meanRGBAmount1": [
+          123.0,
+          152.69,
+          184.15
+        ]
+      },
+      "errors": [],
+      "pass": false
+    },
+    "repaired": {
+      "rim": {
+        "storedRim_b": 1.0,
+        "meanAbsDiff8bit": 5.9937,
+        "meanLevelAmount0": 129.912,
+        "meanLevelAmount1": 135.899
+      },
+      "colour": {
+        "storedColour_a": 0.9999,
+        "meanAbsDiff8bit": 15.4134,
+        "meanRGBAmount0": [
+          131.09,
+          160.48,
+          191.92
+        ],
+        "meanRGBAmount1": [
+          157.86,
+          168.13,
+          185.37
+        ]
+      },
+      "errors": [],
+      "pass": true
+    }
+  },
+  "matchedStills": "p0_before_vs_repaired.jpg (+ .json for per-pair differences); conditions in p0_matched_conditions.json"
+}

@@ -1,0 +1,134 @@
+{
+  "set": "baseline",
+  "repo": "this branch (repaired)",
+  "viewport": [
+    1440,
+    900
+  ],
+  "pixelRatio": 1,
+  "source": "tools/phrase_excerpt.py (synthetic, 20 s, 44.1 kHz)",
+  "moments": {
+    "rest": 2.5,
+    "attack": 4.45,
+    "crest": 11.06,
+    "release": 15.5
+  },
+  "cameras": [
+    "stand"
+  ],
+  "seed": 1,
+  "renderer": "software WebGL (SwiftShader): appearance only, not performance",
+  "shots": {
+    "m_baseline_av2p_rest_stand.png": {
+      "t": 2.5078,
+      "rimEnvelopeAtSource": 0,
+      "storedRim_b": 0,
+      "colourEnvelopeAtSource": 0,
+      "storedColour_a": 0,
+      "colourAmount": 0,
+      "rimAmount": 1
+    },
+    "m_baseline_av2p_attack_stand.png": {
+      "t": 4.4582,
+      "rimEnvelopeAtSource": 0.2858,
+      "storedRim_b": 0.2858,
+      "colourEnvelopeAtSource": 0.2456,
+      "storedColour_a": 0.2456,
+      "colourAmount": 0,
+      "rimAmount": 1
+    },
+    "m_baseline_av2p_crest_stand.png": {
+      "t": 11.0643,
+      "rimEnvelopeAtSource": 0.8233,
+      "storedRim_b": 0.8233,
+      "colourEnvelopeAtSource": 0.6287,
+      "storedColour_a": 0.6287,
+      "colourAmount": 0,
+      "rimAmount": 1
+    },
+    "m_baseline_av2p_release_stand.png": {
+      "t": 15.5109,
+      "rimEnvelopeAtSource": 0.0015,
+      "storedRim_b": 0.0015,
+      "colourEnvelopeAtSource": 0.231,
+      "storedColour_a": 0.231,
+      "colourAmount": 0,
+      "rimAmount": 1
+    },
+    "m_baseline_nocturne_rest_stand.png": {
+      "t": 2.5078,
+      "rimEnvelopeAtSource": 0,
+      "storedRim_b": 0,
+      "colourEnvelopeAtSource": 0,
+      "storedColour_a": 0,
+      "colourAmount": 0,
+      "rimAmount": 1
+    },
+    "m_baseline_nocturne_attack_stand.png": {
+      "t": 4.4582,
+      "rimEnvelopeAtSource": 0.2858,
+      "storedRim_b": 0.2858,
+      "colourEnvelopeAtSource": 0.2456,
+      "storedColour_a": 0.2456,
+      "colourAmount": 0,
+      "rimAmount": 1
+    },
+    "m_baseline_nocturne_crest_stand.png": {
+      "t": 11.0643,
+      "rimEnvelopeAtSource": 0.8233,
+      "storedRim_b": 0.8233,
+      "colourEnvelopeAtSource": 0.6287,
+      "storedColour_a": 0.6287,
+      "colourAmount": 0,
+      "rimAmount": 1
+    },
+    "m_baseline_nocturne_release_stand.png": {
+      "t": 15.5109,
+      "rimEnvelopeAtSource": 0.0015,
+      "storedRim_b": 0.0015,
+      "colourEnvelopeAtSource": 0.231,
+      "storedColour_a": 0.231,
+      "colourAmount": 0,
+      "rimAmount": 1
+    },
+    "m_baseline_plume_rest_stand.png": {
+      "t": 2.5078,
+      "rimEnvelopeAtSource": 0,
+      "storedRim_b": 0,
+      "colourEnvelopeAtSource": 0.2761,
+      "storedColour_a": 0.2761,
+      "colourAmount": 0.35,
+      "rimAmount": 1
+    },
+    "m_baseline_plume_attack_stand.png": {
+      "t": 4.4582,
+      "rimEnvelopeAtSource": 0.5495,
+      "storedRim_b": 0.5495,
+      "colourEnvelopeAtSource": 0.4347,
+      "storedColour_a": 0.4347,
+      "colourAmount": 0.35,
+      "rimAmount": 1
+    },
+    "m_baseline_plume_crest_stand.png": {
+      "t": 11.0643,
+      "rimEnvelopeAtSource": 0.7178,
+      "storedRim_b": 0.7178,
+      "colourEnvelopeAtSource": 0.6925,
+      "storedColour_a": 0.6925,
+      "colourAmount": 0.35,
+      "rimAmount": 1
+    },
+    "m_baseline_plume_release_stand.png": {
+      "t": 15.5109,
+      "rimEnvelopeAtSource": 0.0109,
+      "storedRim_b": 0.0109,
+      "colourEnvelopeAtSource": 0.5881,
+      "storedColour_a": 0.5881,
+      "colourAmount": 0.35,
+      "rimAmount": 1
+    }
+  },
+  "ready": true,
+  "version": "study-01/0.2.0",
+  "errors": []
+}

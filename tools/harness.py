@@ -5,7 +5,7 @@ import os, re, subprocess, time, socket
 from playwright.async_api import async_playwright  # noqa: F401  (re-exported)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+REPO = os.environ.get('LP_REPO', os.path.dirname(HERE))      # LP_REPO: run these tools against another checkout (e.g. an older commit)
 OUT = os.environ.get('LP_OUT', os.path.join(HERE, 'captures'))
 os.makedirs(OUT, exist_ok=True)
 NM = os.environ.get('LP_NODE_MODULES', os.path.join(HERE, 'node_modules'))

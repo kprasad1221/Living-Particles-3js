@@ -1,0 +1,72 @@
+{
+  "channels_hold_their_own_destination": {
+    "pass": true,
+    "voice1_rgba": [
+      0.2,
+      0,
+      0.1,
+      0.05
+    ],
+    "voice5_rgba": [
+      0.6,
+      1,
+      0.3,
+      0.15
+    ]
+  },
+  "global_column_and_shimmer_slot": {
+    "pass": true,
+    "global_rgba": [
+      0.9,
+      0.37,
+      0.45,
+      0.225
+    ]
+  },
+  "older_rows_keep_every_channel": {
+    "pass": true,
+    "rows": 3,
+    "rim_rows_0_1_2": [
+      0.0875,
+      0.175,
+      0.35
+    ]
+  },
+  "destinations_are_independent": {
+    "pass": true,
+    "before": [
+      0.5,
+      0,
+      0.25,
+      0.125
+    ],
+    "after": [
+      0.5,
+      0,
+      0.5,
+      0.125
+    ]
+  },
+  "rim_and_colour_keep_their_own_timing": {
+    "pass": true,
+    "lift": 1,
+    "rim": 0.9,
+    "colour": 0.2057
+  },
+  "capacity_and_oldest_row": {
+    "pass": true,
+    "rows": 512,
+    "capacity_s_at_60": 8.533,
+    "oldest_valid_age_s_at_60": 8.517
+  },
+  "reset_clears_every_channel": {
+    "pass": true,
+    "rowsAfterReset": 0,
+    "firstRowRim": 0.15
+  },
+  "texture_is_the_asserted_array": {
+    "pass": true,
+    "width": 9,
+    "height": 512
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "a": "28e8c16 (study-01-precision-pass head, unchanged)",
+  "b": "repaired (history writes restored; nothing else changed)",
+  "labels": [
+    "28e8c16",
+    "repaired"
+  ],
+  "set": "baseline",
+  "camera": "stand",
+  "pairs": {
+    "av2p|av2p|rest": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 108.75,
+      "levelB": 108.75,
+      "changedPixelsPct": 0.0
+    },
+    "av2p|av2p|attack": {
+      "meanAbsDiff8bit": 0.418,
+      "levelA": 113.68,
+      "levelB": 114.04,
+      "changedPixelsPct": 6.96
+    },
+    "av2p|av2p|crest": {
+      "meanAbsDiff8bit": 1.637,
+      "levelA": 115.18,
+      "levelB": 116.73,
+      "changedPixelsPct": 25.88
+    },
+    "av2p|av2p|release": {
+      "meanAbsDiff8bit": 0.18,
+      "levelA": 109.59,
+      "levelB": 109.77,
+      "changedPixelsPct": 4.07
+    },
+    "nocturne|nocturne|rest": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 15.89,
+      "levelB": 15.89,
+      "changedPixelsPct": 0.0
+    },
+    "nocturne|nocturne|attack": {
+      "meanAbsDiff8bit": 1.783,
+      "levelA": 40.28,
+      "levelB": 42.06,
+      "changedPixelsPct": 38.1
+    },
+    "nocturne|nocturne|crest": {
+      "meanAbsDiff8bit": 4.541,
+      "levelA": 64.9,
+      "levelB": 69.42,
+      "changedPixelsPct": 71.61
+    },
+    "nocturne|nocturne|release": {
+      "meanAbsDiff8bit": 0.847,
+      "levelA": 29.11,
+      "levelB": 29.93,
+      "changedPixelsPct": 12.88
+    },
+    "plume|plume|rest": {
+      "meanAbsDiff8bit": 0.001,
+      "levelA": 14.07,
+      "levelB": 14.07,
+      "changedPixelsPct": 0.0
+    },
+    "plume|plume|attack": {
+      "meanAbsDiff8bit": 3.782,
+      "levelA": 36.29,
+      "levelB": 40.06,
+      "changedPixelsPct": 49.11
+    },
+    "plume|plume|crest": {
+      "meanAbsDiff8bit": 7.417,
+      "levelA": 36.58,
+      "levelB": 43.62,
+      "changedPixelsPct": 66.79
+    },
+    "plume|plume|release": {
+      "meanAbsDiff8bit": 1.031,
+      "levelA": 18.98,
+      "levelB": 19.87,
+      "changedPixelsPct": 18.62
+    }
+  }
+}

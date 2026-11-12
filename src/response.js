@@ -75,7 +75,11 @@ function writeRow() {
   R.hist.copyWithin(row, 0, (HIST - 1) * row);
   for (let k = 0; k < COLS; k++) {
     const i = k * 4;
-    R.hist[i] = R.lift[k]; R.hist[i + 1] = k < NB ? R.hit[k] : R.shimmer;      // global column: g = shimmer (travels with the ripple) R.hist[i + 2] = R.rim[k]; R.hist[i + 3] = R.colour[k];
+    // One statement per channel. tools/history.test.mjs asserts each channel's meaning.
+    R.hist[i] = R.lift[k];
+    R.hist[i + 1] = k < NB ? R.hit[k] : R.shimmer;      // global column: g = shimmer (travels with the ripple)
+    R.hist[i + 2] = R.rim[k];
+    R.hist[i + 3] = R.colour[k];
   }
   R.rows = Math.min(HIST, R.rows + 1);
   R.tex.needsUpdate = true;

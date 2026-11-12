@@ -9,8 +9,11 @@ virtual audio clock (sources.virtual), so every shot and check is repeatable.
   python capture.py ui                     # interface at 1440, 820 and 390 px
   python capture.py phrase                 # matched rest/attack/crest/release on the composed excerpt
   python capture.py harmony                # Harmony → Shimmer off/on and its meters, on the same excerpt
+  python capture.py matched [set]          # matched stills (rest/attack/crest/release) for a named set of scenes
+  python compare.py sheet A B out.jpg      # pair two folders of matched stills into one labelled sheet + stats
 
-Waveform fixtures (no browser): node tools/fixtures.mjs
+Waveform fixtures and history-channel checks (no browser): node tools/fixtures.mjs · node tools/history.test.mjs
+Another checkout (e.g. an older commit): LP_REPO=/path/to/checkout LP_PORT=8791 LP_OUT=captures/old python capture.py matched
 """
 import asyncio, sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -236,9 +239,101 @@ async def check():
                    restRim: lp.app.lookA.restRim,
                    pass: P.movement.ceil > P.movement.floor && P.sparks.life > 0 && P.floor.rings <= 96 && Number.isFinite(P.music.reference) && P.sparks.perHit <= 400 && Number.isFinite(lp.app.lookA.restRim) }; }""")
         res['errors'] = [l for l in logs if l.startswith('[error]') or l.startswith('[pageerror]')]
+        await page.close()
+        res['history_reaches_the_screen'] = await history_on_screen(b)
         await b.close()
     print(json.dumps(res, indent=1))
     with open(os.path.join(OUT, 'check.json'), 'w') as f: json.dump(res, f, indent=2)
+
+async def history_on_screen(b):
+    """8 · The rim and colour history channels reach the picture (the v0.3 · P0 repair, end to end).
+    Same audio time, same camera, one mapping amount changed: the rendered frames must differ.
+      rim     solo Rim breath, bass held at full level: amount 0 vs 1 (b channel → whole-floor rim pulse)
+      colour  sub held at full level and chosen as the colour source: amount 0 vs 1 (a channel → hue drift)
+    With the b / a writes missing both pairs render identical frames (difference exactly 0)."""
+    import io
+    import numpy as np
+    from PIL import Image
+    page, logs = await boot(b, 960, 600)
+    await page.evaluate("""() => { const lp = window.__lp; document.body.classList.add('perform'); document.querySelector('.toggles').style.visibility = 'hidden';
+      lp.app.resetScene(); lp.app.loadLook('a', 'av2'); lp.P.looks.preview = 'a'; lp.P.pointer.on = false; lp.P.sparks.on = false;
+      lp.P.movement.ripple = 'instant'; lp.P.manual.on = true; lp.P.manual.level = 1; lp.goTo('stand'); }""")
+    async def frame(js):
+        await page.evaluate(f"() => {{ const lp = window.__lp, P = lp.P; {js} }}")
+        await play_to(page, 6.0, 3.0)
+        for _ in range(2): await page.evaluate('window.__fake.step(16.6667)')
+        await page.wait_for_timeout(120)
+        im = np.asarray(Image.open(io.BytesIO(await page.screenshot())).convert('RGB')).astype(np.float32)
+        stored = await page.evaluate("() => { const lp = window.__lp; return { rim_b: lp.histAt(1, 0, 2), colour_a: lp.histAt(0, 0, 3) }; }")
+        return im, stored
+    out = {}
+    rim0, _ = await frame("P.solo.dest = 'rim'; P.manual.voice = 1; P.map.rim.source = 1; P.map.rim.amount = 0;")
+    rim1, st = await frame("P.map.rim.amount = 1;")
+    out['rim'] = {'storedRim_b': round(st['rim_b'], 4), 'meanAbsDiff8bit': round(float(np.abs(rim1 - rim0).mean()), 4),
+                  'meanLevelAmount0': round(float(rim0.mean()), 3), 'meanLevelAmount1': round(float(rim1.mean()), 3)}
+    col0, _ = await frame("P.solo.dest = 'none'; P.map.rim.amount = 1; P.manual.voice = 0; P.map.colour.source = 0; P.map.colour.amount = 0;")
+    col1, st = await frame("P.map.colour.amount = 1;")
+    out['colour'] = {'storedColour_a': round(st['colour_a'], 4), 'meanAbsDiff8bit': round(float(np.abs(col1 - col0).mean()), 4),
+                     'meanRGBAmount0': [round(float(v), 2) for v in col0.reshape(-1, 3).mean(0)], 'meanRGBAmount1': [round(float(v), 2) for v in col1.reshape(-1, 3).mean(0)]}
+    out['errors'] = [l for l in logs if l.startswith('[error]') or l.startswith('[pageerror]')]
+    out['pass'] = (out['rim']['storedRim_b'] > 0.9 and out['rim']['meanAbsDiff8bit'] > 0.25 and out['rim']['meanLevelAmount1'] > out['rim']['meanLevelAmount0']
+                   and out['colour']['storedColour_a'] > 0.9 and out['colour']['meanAbsDiff8bit'] > 0.05 and not out['errors'])
+    await page.close()
+    return out
+
+# ── Matched stills ───────────────────────────────────────────────────────────
+# One set = a few named scene setups, each shot at the same four audio times of the composed
+# excerpt (rest, attack, crest, release), same camera, seed, viewport and pixel ratio. Later
+# checkpoints add sets here; the JS in a set must only use what exists in the checkout it runs on.
+SETS = {
+  # v0.3 · P0: the reviewed precision-pass scenes, to see what the history repair alone changes.
+  'baseline': {
+    'av2p':     "lp.app.resetScene(); lp.app.loadLook('a', 'av2p'); lp.P.looks.preview = 'a';",
+    'nocturne': "lp.app.resetScene(); lp.app.loadLook('a', 'nocturne'); lp.P.looks.preview = 'a';",
+    'plume':    "lp.app.loadPlumeScene(); lp.P.looks.preview = 'a';",
+  },
+}
+VIEW = (1440, 900)
+
+async def load_excerpt(page):
+    from phrase_excerpt import write
+    wav = write(os.path.join(OUT, 'phrase_excerpt.wav'))
+    await page.set_input_files('#fileInput', wav)
+    for _ in range(240):
+        if await page.evaluate("window.__lp.sources.mode === 'track' && window.__lp.ready()"): return True
+        await page.evaluate('window.__fake.step(16.6667)'); await page.wait_for_timeout(100)
+    return False
+
+SHOT_STATE = """() => { const lp = window.__lp, r = lp.response;
+  return { t: +lp.timeline.latest.toFixed(4), rimEnvelopeAtSource: +r.rim[lp.P.map.rim.source].toFixed(4), storedRim_b: +lp.histAt(lp.P.map.rim.source, 0, 2).toFixed(4),
+           colourEnvelopeAtSource: +r.colour[lp.P.map.colour.source].toFixed(4), storedColour_a: +lp.histAt(lp.P.map.colour.source, 0, 3).toFixed(4),
+           colourAmount: lp.P.map.colour.amount, rimAmount: lp.P.map.rim.amount }; }"""
+
+async def matched(set_name='baseline', cams=('stand',), extra_js=''):
+    from phrase_excerpt import MOMENTS
+    res = {'set': set_name, 'repo': REPO, 'viewport': VIEW, 'pixelRatio': 1, 'source': 'tools/phrase_excerpt.py (synthetic, 20 s, 44.1 kHz)',
+           'moments': MOMENTS, 'cameras': list(cams), 'seed': 1, 'renderer': 'software WebGL (SwiftShader): appearance only, not performance', 'shots': {}}
+    async with async_playwright() as p:
+        b = await launch(p); page, logs = await boot(b, *VIEW)
+        res['ready'] = await load_excerpt(page)
+        res['version'] = await page.evaluate("window.__lp.VERSION")
+        await page.evaluate("document.body.classList.add('perform'); document.querySelector('.toggles').style.visibility='hidden'")
+        for name, js in SETS[set_name].items():
+            await page.evaluate(f"() => {{ const lp = window.__lp; {js} lp.P.pointer.on = false; lp.sparks.seed = 1; {extra_js} }}")
+            for label, t in MOMENTS.items():
+                for cam in cams:
+                    await page.evaluate(f"window.__lp.goTo('{cam}')")
+                    await play_to(page, t, max(0.0, t - 2.5))
+                    for _ in range(2): await page.evaluate('window.__fake.step(16.6667)')
+                    await page.wait_for_timeout(150)
+                    f = f'm_{set_name}_{name}_{label}_{cam}.png'
+                    await page.screenshot(path=os.path.join(OUT, f))
+                    res['shots'][f] = await page.evaluate(SHOT_STATE)
+                    print('saved', f, res['shots'][f])
+        res['errors'] = [l for l in logs if l.startswith('[error]') or l.startswith('[pageerror]')]
+        await b.close()
+    with open(os.path.join(OUT, f'matched_{set_name}.json'), 'w') as f: json.dump(res, f, indent=2)
+    print('console errors:', len(res['errors']))
 
 async def phrase():
     """Matched before/after on the composed 20 s excerpt (tools/phrase_excerpt.py): rest, attack,
@@ -336,6 +431,7 @@ if __name__ == '__main__':
     elif args == ['phrase']: asyncio.run(phrase())
     elif args == ['harmony']: asyncio.run(harmony())
     elif args == ['ui']: asyncio.run(ui_views())
+    elif args[:1] == ['matched']: asyncio.run(matched(*(args[1:2] or ['baseline'])))
     elif args[:1] == ['diag']: asyncio.run(diag_views(*(args[1:2] or ['av2p'])))
     elif args[:1] == ['motion']: asyncio.run(motion(tuple(args[1:3]) if len(args) >= 3 else ('av2', 'av2p')))
     else: asyncio.run(captures(args or DEFAULT))
