@@ -64,6 +64,10 @@
     "rowsAfterReset": 0,
     "firstRowRim": 0.15
   },
+  "zero_fall_time_is_instant": {
+    "pass": false,
+    "error": "fall 0 / 199: history holds NaN"
+  },
   "texture_is_the_asserted_array": {
     "pass": true,
     "width": 9,

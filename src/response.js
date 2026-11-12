@@ -46,9 +46,11 @@ export function stepResponse(levels, global, hits, dt, shimmer = 0) {
   for (let k = 0; k < COLS; k++) R.measured[k] = k < NB ? levels[k] : global;
   // lift: rise shared, fall eased log-wise from sub (fall) to air (fallHigh)
   const up = t90coef(M.lift.rise, dt);
+  // easing between two times on a log scale needs both above zero; 0 ms means instant, so floor them at 1 µs
+  const fLo = Math.max(M.lift.fall, 1e-3) || 1e-3, fHi = Math.max(M.lift.fallHigh, 1e-3) || 1e-3;
   for (let k = 0; k < COLS; k++) {
     const x = shape(R.measured[k], M.lift);
-    const fallMs = k < NB ? M.lift.fall * Math.pow(M.lift.fallHigh / M.lift.fall, k / (NB - 1)) : M.lift.fall;
+    const fallMs = k < NB ? fLo * Math.pow(fHi / fLo, k / (NB - 1)) : fLo;
     R.lift[k] += (x - R.lift[k]) * (x > R.lift[k] ? up : t90coef(fallMs, dt));
   }
   for (const [name, arr] of [['rim', R.rim], ['colour', R.colour]]) {

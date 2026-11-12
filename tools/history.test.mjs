@@ -167,7 +167,26 @@ check('reset_clears_every_channel', () => {
   return { rowsAfterReset: 0, firstRowRim: +texel(0, 2, B).toFixed(4) };
 });
 
-// 8 · What is asserted above is what the GPU samples: the texture wraps this very array, one texel per column.
+// 8 · A fall time of 0 ms means instant. At 28e8c16 the sub → air easing computed 0 · (x / 0)^k = NaN for
+//     every voice above the sub, and NaN then stayed in the envelope and the history (reachable from an
+//     imported scene: validation accepts 0).
+check('zero_fall_time_is_instant', () => {
+  const out = {};
+  for (const [fall, fallHigh] of [[0, 199], [797, 0], [0, 0]]) {
+    Object.assign(P.map.lift, { rise: 0, fall, fallHigh });
+    clearResponse();
+    stepResponse(levelsAt(1), GLOBAL_LEVEL, noHits, DT, 0);
+    stepResponse(levelsAt(0.5), GLOBAL_LEVEL, noHits, DT, 0);        // falling: this is where the fall time is used
+    for (let i = 0; i < 2 * COLS * 4; i++) expect(Number.isFinite(response.hist[i]), `fall ${fall} / ${fallHigh}: history holds ${response.hist[i]}`);
+    if (fall === 0) expect(near(response.lift[0], 0.05), `fall 0: sub should drop at once (${response.lift[0]})`);
+    if (fallHigh === 0) expect(near(response.lift[NB - 1], 0.4), `fallHigh 0: air should drop at once (${response.lift[NB - 1]})`);
+    out[`${fall}/${fallHigh}`] = Array.from(response.lift).map(v => +v.toFixed(3));
+  }
+  instantMapping();
+  return out;
+});
+
+// 9 · What is asserted above is what the GPU samples: the texture wraps this very array, one texel per column.
 check('texture_is_the_asserted_array', () => {
   const img = response.tex.image;
   expect(img.data === response.hist, 'the DataTexture does not wrap response.hist');

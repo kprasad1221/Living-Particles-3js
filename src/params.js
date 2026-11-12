@@ -32,7 +32,7 @@ export const VOICE_NAMES = ['sub', 'bass', 'low mid', 'mid', 'upper mid', 'prese
 // Timing convention for every rise/fall shown in the interface: milliseconds to cover 90 %
 // of a step (rise) or to decay by 90 % (fall). One-pole coefficient per update of dt seconds:
 //   c = 1 − exp(−ln(10) · dt / t90)      (t90 = half-life × log2(10) ≈ 3.32 × half-life)
-export const t90coef = (ms, dt) => ms <= 0 ? 1 : 1 - Math.exp(-Math.LN10 * dt / (ms / 1000));
+export const t90coef = (ms, dt) => !(ms > 0) ? 1 : 1 - Math.exp(-Math.LN10 * dt / (ms / 1000));   // 0 (or not a number) = instant
 export const GLOBAL = 8;           // history column 8 holds the global (whole-spectrum) level
 
 export const P = {
