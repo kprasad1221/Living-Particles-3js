@@ -1,11 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Living Particles · Study 01 · Hex Field — precision pass
+//  Living Particles · Study 01 · Hex Field — v0.3
 //
 //  SOURCE    pattern / track (precise, analysed ahead) · mic / stress (live, basic)
 //  TIMELINE  musical time → feature frames → gate + level → per-destination envelopes
 //            → history rows (9 × 512); hit events → flashes and finite spark budgets
 //  FIELD     ~7.5k instanced hex prisms read the history at their own ripple delay
 //  LOOK      two editable looks, previewed alone or mixed by a fader, an LFO or a voice
+//  UI        one bar (source, transport, scene, look mix, three macros); the editor shows one
+//            family at a time; Music is a drawer; meters appear with the families that need them
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import { P, VERSION, NB, VOICE_NAMES, FFT_SIZE, LOW_FFT_SIZE } from './params.js';
@@ -18,31 +20,37 @@ import { ANALYSIS_VERSION } from './analysis/features.js';
 import { renderPattern } from './analysis/pattern.js';
 import { HexField } from './world/hexfield.js';
 import { Sparks } from './world/sparks.js';
-import { Stage } from './world/stage.js';
+import { Stage, BOOKMARKS } from './world/stage.js';
 import { Meters } from './ui/meters.js';
 import { Library, fmt } from './ui/library.js';
-import { buildPanel } from './ui/panel.js';
-import { buildStrip } from './ui/strip.js';
-import { SAVED_GROUPS, migrate, assignGroup, validate, header } from './scene.js';
+import { buildPanel, FAMILIES } from './ui/panel.js';
+import { buildBar } from './ui/bar.js';
+import { SAVED_GROUPS, migrate, assignGroup, validate, header, compatibility } from './scene.js';
 
 const $ = id => document.getElementById(id);
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-const DEFAULTS = JSON.parse(JSON.stringify(P));
+const clone = o => JSON.parse(JSON.stringify(o));
+const DEFAULTS = clone(P);
 
 // ── State ───────────────────────────────────────────────────────────────────
-let panel = null, strip = null;
+let panel = null, bar = null;
 const state = { running: true, voiceMorph: 0, visualTime: 0, analysis: 'idle', progress: 0, lastT: 0 };
+const savedUi = store.get('lp.ui', {});
 const app = {
   lookA: cloneLook(LOOKS[P.looks.a]), lookB: cloneLook(LOOKS[P.looks.b]),
   mixed: {},
   userLooks: Object.fromEntries(Object.entries(store.get('lp.looks', {})).map(([k, l]) => [k, sanitizeLook(l, LOOKS.av2)])),
-  scenes: store.get('lp.scenes', {}),
+  scenes: store.get('lp.scenes', {}),              // one scene per track, keyed by track name
+  userScenes: store.get('lp.userScenes', {}),      // named scenes
   stats: { tiles: 0, sparks: 0, dropped: 0, fps: 0, calls: 0, tris: 0, frameMs: 0 },
-  ui: { saveName: 'my look' },
+  // Interface state: a per-browser convenience, never part of a scene.
+  ui: { saveName: 'my look', hidden: false, library: false,
+        mode: savedUi.mode === 'edit' ? 'edit' : 'perform',
+        family: FAMILIES.some(f => f[0] === savedUi.family) ? savedUi.family : 'looks' },
   defaults: DEFAULTS,
   lastSaved: null,
 };
@@ -210,17 +218,26 @@ function updateMorph(dt) {
 }
 
 // ── Scenes ──────────────────────────────────────────────────────────────────
+//  A scene is every saved control, both looks, the mix state and the camera. Where they come from:
+//    built in   authored starting points (BUILTIN below)
+//    saved      named scenes in this browser                 (lp.userScenes)
+//    track      one scene per track, recalled with the track (lp.scenes, as in v0.2)
+//    file       an imported JSON
+//  The bar shows which scene is loaded, whether anything changed since, Revert and Save.
 function snapshot() {
   const s = header();
-  for (const g of SAVED_GROUPS()) s[g] = JSON.parse(JSON.stringify(P[g]));
+  for (const g of SAVED_GROUPS()) s[g] = clone(P[g]);
   s.view = { pos: stage.camera.position.toArray(), target: stage.controls.target.toArray() };
   const { preview, ...looks } = P.looks;                 // preview is an audition, never saved
   s.looks = { ...looks, lookA: cloneLook(app.lookA), lookB: cloneLook(app.lookB) };
   return s;
 }
 function applyScene(input, { fly = true } = {}) {
+  const ok = compatibility(input);
+  if (!ok.ok) { app.sceneError = ok.message; console.warn('[scene]', ok.message); return false; }
   const s = migrate(input);
   if (!s) return false;
+  app.sceneError = '';
   const floorBefore = JSON.stringify(P.floor);
   for (const g of SAVED_GROUPS()) assignGroup(P[g], s[g]);
   if (s.looks) {
@@ -239,10 +256,10 @@ function applyScene(input, { fly = true } = {}) {
   }
   stage.resize(innerWidth, innerHeight);
   app.redetect();
-  panel?.refresh(); strip?.refresh();
+  panel?.refresh(); bar?.refresh();
   return true;
 }
-for (const [name, sc] of Object.entries(app.scenes)) { const m = migrate(sc); if (m) app.scenes[name] = m; else delete app.scenes[name]; }
+for (const bag of [app.scenes, app.userScenes]) for (const [name, sc] of Object.entries(bag)) { const m = migrate(sc); if (m) bag[name] = m; else delete bag[name]; }
 let saveTimer = 0;
 function autosave() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set('lp.current', snapshot()), 400); }
 app.autosave = autosave;
@@ -250,50 +267,130 @@ app.validate = () => { validate(); };
 
 app.rebuild = () => { field.build(P.floor); app.stats.tiles = field.layout.count; sparks.clear(); autosave(); };
 app.resize = () => { stage.resize(innerWidth, innerHeight); meters.resize(); };
+
+// Built-in scenes: authored starting points. Each returns a complete scene.
+const standView = () => ({ pos: [...BOOKMARKS.stand.pos], target: [...BOOKMARKS.stand.target] });
+const BUILTIN = {
+  default: { label: 'Default · AV2 Precision', make() {
+    const d = clone(DEFAULTS);
+    return { ...header(), ...d, view: standView(), looks: { ...d.looks, lookA: LOOKS[d.looks.a], lookB: LOOKS[d.looks.b] } };
+  } },
+  // The Plume phrase (v0.2 spec §7): weight from the low end, a clear plume on bass hits, sparse
+  // high sparks as counterpoint, slow colour change, dark regions.
+  plume: { label: 'Plume phrase · Nocturne', make() {
+    const d = clone(DEFAULTS);
+    Object.assign(d.floor, { active: 0.45, variation: 0.85, scatter: 0.1 });
+    Object.assign(d.movement, { lift: 1.3, swell: 0.9, travel: 30 });
+    Object.assign(d.map.rim, { source: 0, fall: 900 });
+    Object.assign(d.map.colour, { source: 8, amount: 0.35, rise: 3000, fall: 6000 });
+    Object.assign(d.sparks, { perHit: 10, from: 'highs', continuous: 0, life: 0.9, size: 0.22 });
+    Object.assign(d.plume, { on: true, voice: 1 });
+    const lookA = { ...LOOKS.nocturne, restRim: 0.35, rimBreath: 0.9, fill: 0.5, bloom: 0.55, bloomThreshold: 0.7, bloomSky: 0, hitWhiten: 0.2, name: 'Nocturne · plume' };
+    return { ...header(), ...d, view: standView(), looks: { ...d.looks, a: 'nocturne', b: 'av2p', morph: 0, lookA, lookB: LOOKS.av2p } };
+  } },
+};
+app.builtinScenes = BUILTIN;
+
+// Which scene is loaded, and what it looked like when loaded or last saved (for "edited" and Revert).
+// The camera is saved with a scene but moving it does not count as an edit.
+const sceneKey = s => { const { saved, version, schema, migratedFrom, view, ...rest } = s; return JSON.stringify(rest); };
+const scene = { ref: 'builtin:default', label: BUILTIN.default.label, base: null, baseKey: '', modified: false };
+function setBase(ref, label) {
+  scene.ref = ref; scene.label = label; scene.base = snapshot(); scene.baseKey = sceneKey(scene.base); scene.modified = false;
+  store.set('lp.sceneRef', { ref, label });
+}
+function resolveScene(ref) {
+  const [kind, ...rest] = String(ref).split(':'), key = rest.join(':');
+  if (kind === 'builtin' && BUILTIN[key]) return { data: BUILTIN[key].make(), label: BUILTIN[key].label };
+  if (kind === 'user' && app.userScenes[key]) return { data: app.userScenes[key], label: key };
+  if (kind === 'track' && app.scenes[key]) return { data: app.scenes[key], label: `${key} (track)` };
+  return null;
+}
+app.loadSceneRef = (ref, opts) => {
+  const r = resolveScene(ref);
+  if (!r || !applyScene(r.data, opts)) return false;
+  setBase(ref, r.label); autosave();
+  return true;
+};
+app.revertScene = () => { if (scene.base && applyScene(scene.base)) { scene.modified = false; autosave(); } };
+app.sceneList = () => {
+  const groups = [
+    { label: 'Built in', items: Object.entries(BUILTIN).map(([k, b]) => ({ ref: 'builtin:' + k, label: b.label })) },
+    { label: 'Saved', items: Object.keys(app.userScenes).sort().map(k => ({ ref: 'user:' + k, label: k })) },
+    { label: 'Saved with a track', items: Object.keys(app.scenes).sort().map(k => ({ ref: 'track:' + k, label: k })) },
+  ];
+  if (!resolveScene(scene.ref)) groups.push({ label: 'Loaded', items: [{ ref: scene.ref, label: scene.label }] });
+  return groups;
+};
+const activeTrackName = () => (sources.mode === 'track' && library.active ? library.active.name : '');
+app.sceneState = () => {
+  const trackName = activeTrackName(), kind = scene.ref.split(':')[0];
+  return { ref: scene.ref, label: scene.label, modified: scene.modified, trackName,
+           suggestedName: kind === 'user' ? scene.ref.slice(5) : trackName || `${scene.label.split(' · ')[0]} · mine` };
+};
+const STORAGE_FAIL = 'Could not save: this browser’s storage is unavailable or full.';
+app.saveNamedScene = raw => {
+  const name = String(raw || '').trim().slice(0, 60);
+  if (!name) return { ok: false, message: 'Give the scene a name first.' };
+  app.userScenes[name] = snapshot();
+  if (!store.set('lp.userScenes', app.userScenes)) return { ok: false, message: STORAGE_FAIL };
+  setBase('user:' + name, name);
+  return { ok: true, name };
+};
+app.deleteNamedScene = () => {
+  if (!scene.ref.startsWith('user:')) return { ok: false, message: 'Only named scenes can be deleted here.' };
+  const name = scene.ref.slice(5);
+  delete app.userScenes[name]; store.set('lp.userScenes', app.userScenes);
+  setBase('session', `${name} (deleted, still loaded)`);
+  return { ok: true, name };
+};
+app.saveTrackScene = () => {
+  const t = sources.mode === 'track' ? library.active : null;
+  if (!t) return { ok: false, message: 'Play a track from Music first; then its scene can be saved with it.' };
+  app.scenes[t.name] = snapshot(); app.lastSaved = app.scenes[t.name];
+  if (!store.set('lp.scenes', app.scenes)) return { ok: false, message: STORAGE_FAIL };
+  library.render(); setBase('track:' + t.name, `${t.name} (track)`);
+  return { ok: true, name: t.name };
+};
 app.exportScene = () => {
   const blob = new Blob([JSON.stringify(snapshot(), null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
-  const base = library.active ? library.active.name : 'scene';
+  const base = scene.ref.startsWith('user:') ? scene.ref.slice(5) : library.active ? library.active.name : 'scene';
   a.href = URL.createObjectURL(blob); a.download = `living-particles_${base.replace(/[^\w.-]+/g, '_')}.json`;
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 };
-app.importScene = () => {
+// Apply an imported scene object. Returns { ok, message }.
+app.applyImported = (obj, name = 'imported scene') => {
+  if (!applyScene(obj)) return { ok: false, message: app.sceneError || 'That file is not a scene this build can read.' };
+  setBase('file:' + name, `${name} (file)`); autosave();
+  return { ok: true, message: '' };
+};
+app.importScene = done => {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json,.json';
   inp.onchange = async () => {
-    try { if (applyScene(JSON.parse(await inp.files[0].text()))) autosave(); }
-    catch (e) { console.error('[scene] import failed', e); }
+    let r;
+    try { r = app.applyImported(JSON.parse(await inp.files[0].text()), inp.files[0].name.replace(/\.json$/i, '')); }
+    catch (e) { console.error('[scene] import failed', e); r = { ok: false, message: 'That file could not be read as JSON.' }; }
+    done?.(r);
   };
   inp.click();
 };
 app.resetScene = () => {
   store.del('lp.current');
-  const d = JSON.parse(JSON.stringify(DEFAULTS));
-  applyScene({ ...header(), ...d, looks: { ...d.looks, lookA: LOOKS[d.looks.a], lookB: LOOKS[d.looks.b] } }, { fly: false });
+  applyScene(BUILTIN.default.make(), { fly: false });
   stage.goTo('stand');
+  setBase('builtin:default', BUILTIN.default.label);
 };
 app.resetGroup = g => {
   const floorBefore = JSON.stringify(P.floor);
-  assignGroup(P[g], JSON.parse(JSON.stringify(DEFAULTS[g])));
+  assignGroup(P[g], clone(DEFAULTS[g]));
   validate();
   if (g === 'floor' && JSON.stringify(P.floor) !== floorBefore) app.rebuild();
   if (g === 'music') app.redetect();
-  panel?.refresh(); strip?.refresh(); autosave();
+  panel?.refresh(); bar?.refresh(); autosave();
 };
 app.restoreSaved = () => { if (app.lastSaved) applyScene(app.lastSaved); };
-// The Plume phrase: a composed starting point (spec §7) — weight from the low end, a clear
-// plume on bass hits, sparse high sparks as counterpoint, slow colour change, dark regions.
-app.loadPlumeScene = () => {
-  const d = JSON.parse(JSON.stringify(DEFAULTS));
-  Object.assign(d.floor, { active: 0.45, variation: 0.85, scatter: 0.1 });
-  Object.assign(d.movement, { lift: 1.3, swell: 0.9, travel: 30 });
-  Object.assign(d.map.rim, { source: 0, fall: 900 });
-  Object.assign(d.map.colour, { source: 8, amount: 0.35, rise: 3000, fall: 6000 });
-  Object.assign(d.sparks, { perHit: 10, from: 'highs', continuous: 0, life: 0.9, size: 0.22 });
-  Object.assign(d.plume, { on: true, voice: 1 });
-  const lookA = { ...LOOKS.nocturne, restRim: 0.35, rimBreath: 0.9, fill: 0.5, bloom: 0.55, bloomThreshold: 0.7, bloomSky: 0, hitWhiten: 0.2, name: 'Nocturne · plume' };
-  applyScene({ ...header(), ...d, looks: { ...d.looks, a: 'nocturne', b: 'av2p', morph: 0, lookA, lookB: LOOKS.av2p } });
-  stage.goTo('stand');
-};
+app.loadPlumeScene = () => app.loadSceneRef('builtin:plume');
 app.snapshot = snapshot;
 
 // ── Library + transport ─────────────────────────────────────────────────────
@@ -301,7 +398,7 @@ const library = new Library({
   list: $('tracks'), empty: $('emptyNote'), sources,
   hasScene: name => !!app.scenes[name],
   onSelect: async t => {
-    if ($('recallChk').checked && app.scenes[t.name]) { applyScene(app.scenes[t.name]); app.lastSaved = app.scenes[t.name]; }
+    if ($('recallChk').checked && app.scenes[t.name] && applyScene(app.scenes[t.name])) { app.lastSaved = app.scenes[t.name]; setBase('track:' + t.name, `${t.name} (track)`); }
     state.running = true; clock.reset();
     await startBuffered('track', t.id, t.name, t.buffer);
   },
@@ -321,29 +418,31 @@ function sourceLabel() {
   return 'Stress test · synthetic spectrum (visual only)';
 }
 function updateStatus() {
-  const np = $('nowPlaying');
-  np.textContent = sourceLabel() + (sources.silent && sources.buffered ? ' · click anywhere for sound' : '');
+  const precise = timeline.mode === 'precise';
+  bar?.setSource(sourceLabel() + (sources.silent && sources.buffered ? ' · click anywhere for sound' : ''),
+    !sources.buffered ? 'live' : precise ? 'precise' : state.analysis === 'analysing' ? 'analysing' : 'basic');
 }
 function setSourceButtons() {
   document.querySelectorAll('[data-source]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.source === sources.mode)));
   document.querySelector('[data-source="track"]').disabled = !library.active;
-  $('saveSceneBtn').disabled = !(sources.mode === 'track' && library.active);
-  $('playBtn').textContent = state.running ? 'Pause' : 'Play';
-  strip?.setPlaying(state.running);
+  bar?.setPlaying(state.running);
   updateStatus();
 }
+const sourceNote = text => { $('sourceNote').textContent = text; };
 
 document.querySelectorAll('[data-source]').forEach(btn => btn.addEventListener('click', async () => {
   const s = btn.dataset.source;
+  sourceNote(s === 'mic' ? 'Waiting for microphone permission…' : '');
   try {
     state.running = true; clock.reset();
     if (s === 'pattern') await usePattern();
     else if (s === 'stress') { sources.useStress(); current.buffer = null; current.key = null; timeline.setLive(48000, FFT_SIZE, null); }
     else if (s === 'mic') { await sources.useMic(); current.buffer = null; current.key = null; timeline.setLive(sources.sampleRate, FFT_SIZE, LOW_FFT_SIZE); }
     else if (s === 'track' && library.active) await library.select(library.active.id);
+    sourceNote('');
   } catch (e) {
     console.warn('[source]', e);
-    $('nowPlaying').textContent = s === 'mic' ? 'Microphone not available (permission denied?)' : 'Could not switch source';
+    sourceNote(s === 'mic' ? 'Microphone not available (permission denied, or no input device). The previous source keeps playing.' : 'Could not switch source.');
     return;
   }
   setSourceButtons();
@@ -361,18 +460,9 @@ app.restart = () => {
   clock.reset();
   if (timeline.mode === 'precise') timeline.reset(0); else timeline.setLive(timeline.live.sr, timeline.live.hi.size, timeline.live.lo?.size || null);
 };
+app.setLoop = on => { sources.setLoop(on); timeline.setLoop(on); };
 app.fireHit = () => timeline.fireManual(P.manual.voice);
-$('playBtn').addEventListener('click', togglePlay);
-$('restartBtn').addEventListener('click', () => app.restart());
-$('loopChk').addEventListener('change', e => { sources.setLoop(e.target.checked); timeline.setLoop(e.target.checked); });
 $('rememberChk').addEventListener('change', e => { library.remember = e.target.checked; });
-$('saveSceneBtn').addEventListener('click', () => {
-  const t = library.active; if (!t) return;
-  app.scenes[t.name] = snapshot(); app.lastSaved = app.scenes[t.name]; store.set('lp.scenes', app.scenes);
-  library.render();
-  $('saveSceneBtn').textContent = 'Saved ✓';
-  setTimeout(() => { $('saveSceneBtn').textContent = 'Save scene to this track'; }, 1400);
-});
 
 $('fileInput').addEventListener('change', async e => {
   const first = await library.add(e.target.files);
@@ -391,23 +481,46 @@ addEventListener('drop', async e => {
   if (first) library.select(first.id);
 });
 
-// ── Panels, camera, keys ────────────────────────────────────────────────────
+// ── Interface: bar, editor, Music drawer, meters, keys ──────────────────────
+//  Perform (default): the bar and the camera chips. Edit: the editor too, one family at a time;
+//  the meters appear with the Music response and Inspect families. H hides everything.
 app.timeline = timeline; app.sources = sources; app.response = response; app.sparks = sparks; app.field = field;
+bar = buildBar($('bar'), app);
 panel = buildPanel($('pane'), app);
-strip = buildStrip($('strip'), app);
 
-const narrow = () => matchMedia('(max-width: 640px)').matches;
-const setOpen = (btn, el, open) => { el.hidden = !open; btn.setAttribute('aria-expanded', String(open)); };
-const toggle = (btn, el) => {
-  const open = el.hidden;
-  if (open && narrow()) { setOpen($('libBtn'), $('library'), false); setOpen($('paneBtn'), $('paneWrap'), false); }
-  setOpen(btn, el, open);
+const sheets = () => matchMedia('(max-width: 900px)').matches;       // the editor and Music share the bottom of a narrow screen
+const METER_FAMILIES = ['music', 'inspect'];
+function layout() {
+  const edit = app.ui.mode === 'edit';
+  document.body.classList.toggle('mode-edit', edit); document.body.classList.toggle('mode-perform', !edit);
+  document.body.classList.toggle('clean', app.ui.hidden);
+  document.body.classList.toggle('sheet-open', edit || app.ui.library);
+  $('paneWrap').hidden = !edit;
+  $('library').hidden = !app.ui.library;
+  $('voices').hidden = !(edit && METER_FAMILIES.includes(app.ui.family));
+  $('showBtn').hidden = !app.ui.hidden;
+  bar.setLibraryOpen(app.ui.library); bar.refresh();
+  if (!$('voices').hidden) meters.resize();
+  store.set('lp.ui', { mode: app.ui.mode, family: app.ui.family });
+}
+app.setMode = mode => {
+  app.ui.mode = mode === 'edit' ? 'edit' : 'perform';
+  if (app.ui.mode === 'edit' && sheets()) app.ui.library = false;
+  layout();
+  if (app.ui.mode === 'edit') panel.refresh();
 };
-if (matchMedia('(max-width: 1100px)').matches) setOpen($('libBtn'), $('library'), false);
-if (narrow()) setOpen($('paneBtn'), $('paneWrap'), false);
-$('libBtn').addEventListener('click', () => toggle($('libBtn'), $('library')));
-$('paneBtn').addEventListener('click', () => toggle($('paneBtn'), $('paneWrap')));
-$('hideBtn').addEventListener('click', () => document.body.classList.toggle('perform'));
+app.setFamily = key => { if (!FAMILIES.some(f => f[0] === key)) return; app.ui.family = key; panel.setFamily(key); layout(); };
+app.toggleLibrary = on => {
+  app.ui.library = on ?? !app.ui.library;
+  if (app.ui.library && sheets()) app.ui.mode = 'perform';
+  layout();
+  if (app.ui.library) $('library').querySelector('[aria-pressed="true"]')?.focus();
+};
+app.setHidden = on => { app.ui.hidden = !!on; layout(); if (on) $('showBtn').focus(); };
+$('libClose').addEventListener('click', () => { app.toggleLibrary(false); $('sourceBtn').focus(); });
+$('showBtn').addEventListener('click', () => app.setHidden(false));
+new ResizeObserver(() => document.documentElement.style.setProperty('--bar-h', `${$('bar').offsetHeight}px`)).observe($('bar'));
+
 function goTo(name) {
   stage.goTo(name);
   document.querySelectorAll('[data-cam]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cam === name)));
@@ -416,14 +529,24 @@ document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click',
 stage.controls.addEventListener('start', () => document.querySelectorAll('[data-cam]').forEach(b => b.setAttribute('aria-pressed', 'false')));
 stage.controls.addEventListener('end', autosave);
 
+// Keys never fire while typing in a field. On a focused button, Space and Enter belong to the button.
 addEventListener('keydown', e => {
-  if (e.target.closest?.('input, textarea, select, [contenteditable], .tp-rotv')) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key.toLowerCase();
+  if (k === 'escape') {                                    // close the innermost thing that is open
+    if (bar.closePopover()) return;
+    if (app.ui.hidden) return app.setHidden(false);
+    if (e.target.closest?.('input, textarea, select')) return e.target.blur();
+    if (app.ui.library) { app.toggleLibrary(false); $('sourceBtn').focus(); return; }
+    if (app.ui.mode === 'edit') { app.setMode('perform'); $('editBtn').focus(); }
+    return;
+  }
+  if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  if ((k === ' ' || k === 'enter') && e.target.closest?.('button, summary, a')) return;
   if (k === ' ') { e.preventDefault(); togglePlay(); }
-  else if (k === 'h' || (k === 'escape' && document.body.classList.contains('perform'))) document.body.classList.toggle('perform');
-  else if (k === 'l') toggle($('libBtn'), $('library'));
-  else if (k === 'p') toggle($('paneBtn'), $('paneWrap'));
+  else if (k === 'h') app.setHidden(!app.ui.hidden);
+  else if (k === 'l') app.toggleLibrary();
+  else if (k === 'e' || k === 'p') app.setMode(app.ui.mode === 'edit' ? 'perform' : 'edit');
   else if (k === 'r') app.restart();
   else if (k === '1') goTo('stand');
   else if (k === '2') goTo('survey');
@@ -463,24 +586,28 @@ function frame(now) {
   const t0 = performance.now();
   const dt = last == null ? 0 : Math.max(0, (now - last) / 1000); last = now;
   const timing = advance(dt);
-  if (state.skipDraw) return;
-  draw(dt, timing);
+  if (!state.skipDraw) {
+    draw(dt, timing);
+    fpsT += dt; fpsN++;
+    frameTimes[ftI++ % frameTimes.length] = performance.now() - t0;
+    if (fpsT >= 0.5) { app.stats.fps = fpsN / fpsT; fpsT = 0; fpsN = 0; }
+  }
   frameNo++;
-  fpsT += dt; fpsN++;
-  frameTimes[ftI++ % frameTimes.length] = performance.now() - t0;
-  if (fpsT >= 0.5) { app.stats.fps = fpsN / fpsT; fpsT = 0; fpsN = 0; }
+  uiTick();
+}
+// The interface refreshes a few times a second, not every frame (and also while drawing is skipped by the tools).
+function uiTick() {
   if (frameNo % 6 === 0) {
     const pos = sources.position(), dur = sources.duration;
-    $('progBar').style.width = dur ? `${(100 * pos / dur).toFixed(2)}%` : '0%';
-    $('timeLine').textContent = sources.buffered ? `${fmt(pos)} / ${fmt(dur)}` : sources.mode === 'mic' ? 'live' : `${fmt(pos)} · stress test`;
-    if (P.looks.drive !== 'hand') panel.refreshMorph();
-    panel.tick(); strip.tick();
+    bar.setTime(sources.buffered ? `${fmt(pos)} / ${fmt(dur)}` : sources.mode === 'mic' ? 'live' : `${fmt(pos)} · stress`, dur ? pos / dur : 0);
+    bar.tick();
+    if (app.ui.mode === 'edit') panel.tick();
   }
   if (frameNo % 30 === 0) {
     sparks.countAlive(state.visualTime);
     app.stats.sparks = sparks.stats.alive; app.stats.dropped = sparks.stats.dropped;
-    accentHex.copy(app.mixed.rim).convertLinearToSRGB();
-    document.documentElement.style.setProperty('--accent', '#' + accentHex.getHexString());
+    if (app.mixed.rim) { accentHex.copy(app.mixed.rim).convertLinearToSRGB(); document.documentElement.style.setProperty('--accent', '#' + accentHex.getHexString()); }
+    scene.modified = sceneKey(snapshot()) !== scene.baseKey;
     updateStatus();
   }
 }
@@ -494,23 +621,30 @@ function draw(dt, timing) {
   renderer.info.reset();
   stage.render();
   app.stats.calls = renderer.info.render.calls; app.stats.tris = renderer.info.render.triangles;
-  meters.setPalette(app.mixed);
-  meters.draw(app, timeline);
+  if (!$('voices').hidden) { meters.setPalette(app.mixed); meters.draw(app, timeline); }
 }
 
 // ── Boot ────────────────────────────────────────────────────────────────────
-const saved = store.get('lp.current', null);
-if (saved) applyScene(saved, { fly: false });
+//  Last session's controls come back as they were. If they came from a scene that still exists,
+//  that scene is the base again, so "edited" and Revert mean the same as before the reload.
+const saved = store.get('lp.current', null), savedRef = store.get('lp.sceneRef', null);
+if (savedRef && resolveScene(savedRef.ref) && applyScene(resolveScene(savedRef.ref).data, { fly: false })) setBase(savedRef.ref, resolveScene(savedRef.ref).label);
+else setBase('builtin:default', BUILTIN.default.label);
+if (saved && applyScene(saved, { fly: false })) {
+  scene.modified = sceneKey(snapshot()) !== scene.baseKey;
+  if (scene.modified && !savedRef) setBase('session', 'Last session');
+}
 app.resize();
-addEventListener('resize', app.resize);
+addEventListener('resize', () => { app.resize(); layout(); });
 library.init().then(setSourceButtons);
 usePattern();
 setSourceButtons();
+layout();
 requestAnimationFrame(frame);
 
 // Hooks for the headless checks in tools/.
 window.__lp = {
-  state, P, app, response, timeline, field, sparks, stage, sources, library, worker, histAt,
+  state, P, app, response, timeline, field, sparks, stage, sources, library, worker, histAt, scene,
   draw(dt = 1 / 60) { draw(dt, advance(0)); },
   advance, restart: () => app.restart(),
   goTo(name) { stage.goTo(name, true); },

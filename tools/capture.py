@@ -22,6 +22,14 @@ from harness import *
 DEFAULT = ['av2p:stand:clean', 'av2:stand:clean', 'av3:stand:clean', 'av1:stand:clean', 'nocturne:stand:clean', 'av2p:survey:clean']
 MOMENT = 6.0          # seconds into the test pattern for every still
 
+
+def ui_js(clean=True):
+    """JS that hides (or shows) the whole interface. Works on v0.2 checkouts (body.perform, .toggles)
+    and on v0.3 (app.setHidden; the "Show controls" chip is hidden too so it never lands in a still)."""
+    c = 'true' if clean else 'false'
+    return ("(() => { const a = window.__lp.app; if (a.setHidden) a.setHidden(%s); else document.body.classList.toggle('perform', %s);"
+            " for (const e of document.querySelectorAll('.toggles, .show-ui')) e.style.visibility = %s ? 'hidden' : ''; })();" % (c, c, c))
+
 async def boot(b, w=1440, h=900):
     page, logs = await new_page(b, w, h)
     await page.goto(serve() + '/index.html'); await page.wait_for_timeout(2000)
@@ -45,8 +53,8 @@ async def play_to(page, t_end, t_start=None, fps=60, draw=False):
     await page.evaluate("() => { window.__lp.state.skipDraw = false; }")
 
 async def shot(page, look, cam, name, clean=True, extra=''):
-    await page.evaluate(f"""() => {{ document.body.classList.toggle('perform', {str(clean).lower()});
-      document.querySelector('.toggles').style.visibility = '{'hidden' if clean else ''}';
+    await page.evaluate(ui_js(clean))
+    await page.evaluate(f"""() => {{
       const lp = window.__lp; lp.app.loadLook('a', '{look}'); lp.P.looks.morph = 0; lp.P.looks.preview = 'a';
       lp.P.pointer.on = false; {extra} lp.goTo('{cam}'); }}""")
     await play_to(page, MOMENT, MOMENT - 2.0)
@@ -76,7 +84,7 @@ async def motion(looks=('av2', 'av2p'), seconds=3.0, fps=30):
     import subprocess, shutil
     async with async_playwright() as p:
         b = await launch(p); page, logs = await boot(b, 960, 600)
-        await page.evaluate("document.body.classList.add('perform'); document.querySelector('.toggles').style.visibility='hidden'")
+        await page.evaluate(ui_js(True))
         clips = []
         for look in looks:
             d = os.path.join(OUT, f'motion_{look}'); shutil.rmtree(d, ignore_errors=True); os.makedirs(d)
@@ -98,13 +106,17 @@ async def motion(looks=('av2', 'av2p'), seconds=3.0, fps=30):
         await b.close()
 
 async def ui_views():
+    """Perform and Edit at three widths. flow.py takes the fuller set while it walks the first-use path."""
     async with async_playwright() as p:
         b = await launch(p)
         for (w, h) in [(1440, 900), (820, 1180), (390, 844)]:
             page, logs = await boot(b, w, h)
             await play_to(page, MOMENT, MOMENT - 1.0)
-            for _ in range(2): await page.evaluate('window.__fake.step(16.6667)')
-            out = os.path.join(OUT, f'ui_{w}x{h}.png'); await page.screenshot(path=out); print('saved', out)
+            for mode in ('perform', 'edit'):
+                await page.evaluate(f"window.__lp.app.setMode('{mode}')")
+                for _ in range(8): await page.evaluate('window.__fake.step(16.6667)')
+                await page.wait_for_timeout(150)
+                out = os.path.join(OUT, f'ui_{mode}_{w}x{h}.png'); await page.screenshot(path=out); print('saved', out)
             await page.close()
         await b.close()
 
@@ -255,7 +267,8 @@ async def history_on_screen(b):
     import numpy as np
     from PIL import Image
     page, logs = await boot(b, 960, 600)
-    await page.evaluate("""() => { const lp = window.__lp; document.body.classList.add('perform'); document.querySelector('.toggles').style.visibility = 'hidden';
+    await page.evaluate(ui_js(True))
+    await page.evaluate("""() => { const lp = window.__lp;
       lp.app.resetScene(); lp.app.loadLook('a', 'av2'); lp.P.looks.preview = 'a'; lp.P.pointer.on = false; lp.P.sparks.on = false;
       lp.P.movement.ripple = 'instant'; lp.P.manual.on = true; lp.P.manual.level = 1; lp.goTo('stand'); }""")
     async def frame(js):
@@ -317,7 +330,7 @@ async def matched(set_name='baseline', cams=('stand',), extra_js=''):
         b = await launch(p); page, logs = await boot(b, *VIEW)
         res['ready'] = await load_excerpt(page)
         res['version'] = await page.evaluate("window.__lp.VERSION")
-        await page.evaluate("document.body.classList.add('perform'); document.querySelector('.toggles').style.visibility='hidden'")
+        await page.evaluate(ui_js(True))
         for name, js in SETS[set_name].items():
             await page.evaluate(f"() => {{ const lp = window.__lp; {js} lp.P.pointer.on = false; lp.sparks.seed = 1; {extra_js} }}")
             for label, t in MOMENTS.items():
@@ -348,7 +361,7 @@ async def phrase():
             if await page.evaluate("window.__lp.sources.mode === 'track' && window.__lp.ready()"): break
             await page.evaluate('window.__fake.step(16.6667)'); await page.wait_for_timeout(100)
         res = {'ready': await page.evaluate("window.__lp.ready()"), 'source': await page.evaluate("document.getElementById('nowPlaying').textContent")}
-        await page.evaluate("document.body.classList.add('perform'); document.querySelector('.toggles').style.visibility='hidden'")
+        await page.evaluate(ui_js(True))
         configs = {
           'baseline': "lp.app.resetScene(); lp.app.loadLook('a', 'av2'); lp.P.looks.preview = 'a';",
           'revision': "lp.app.loadPlumeScene(); lp.P.looks.preview = 'a';",
@@ -414,7 +427,8 @@ async def harmony():
         res['track'] = await page.evaluate("""() => { const tl = window.__lp.timeline, H = tl.harm, out = [];
           for (let t = 0; t <= 20; t += 0.5) { const i = Math.min(H.frames - 1, Math.round(t / H.hop)); out.push([t, +H.raw[i].toFixed(2), +H.conf[i].toFixed(2), H.state[i]]); } return out; }""")
         for on, clean, name in [(False, True, 'harmony_off'), (True, True, 'harmony_on'), (True, False, 'harmony_meters')]:
-            await page.evaluate(f"document.body.classList.toggle('perform', {str(clean).lower()}); document.querySelector('.toggles').style.visibility = '{'hidden' if clean else ''}'; window.__lp.P.harmony.on = {str(on).lower()}; window.__lp.panel && window.__lp.panel.refresh && window.__lp.panel.refresh()")
+            await page.evaluate(ui_js(clean))
+            await page.evaluate(f"window.__lp.P.harmony.on = {str(on).lower()}; if (window.__lp.app.setMode) {{ window.__lp.app.setFamily('music'); window.__lp.app.setMode('edit'); }}")
             await page.evaluate("window.__lp.goTo('stand')")
             await play_to(page, 2.5, 0.5)
             for _ in range(2): await page.evaluate('window.__fake.step(16.6667)')

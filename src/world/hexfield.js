@@ -164,6 +164,7 @@ const fragmentShader = /* glsl */`
   uniform float uRimWidth, uRestRim, uRimBreath, uRimResponse, uInnerSpill, uSpillFalloff, uFill, uFillCore;
   uniform float uSideGlow, uSideFalloff, uTopLine, uEdgeLines, uHitAccent, uHitWhiten, uGrain, uFog, uAffTint;
   uniform float uDiag;          // 0 normal · 1 emission only · 2 surface only
+  uniform float uEmit;          // Light macro: × everything the tile emits (bloom is fed from this, but its strength is separate)
 
   varying vec2 vLocal;
   varying float vY, vTop, vAct, vOnset, vPulse, vAff, vHeight, vShim;
@@ -215,6 +216,7 @@ const fragmentShader = /* glsl */`
     vec3 base = mix(sideBase, face, vTop);
     vec3 emit = mix(sideEmit, topEmit, vTop)
               + uAffColor * vAff * uAffTint * (0.25 + rim * vTop + topLine * (1.0 - vTop));
+    emit *= uEmit;
     if (uDiag > 1.5) emit = vec3(0.0);
     else if (uDiag > 0.5) base = vec3(0.0);
 
@@ -247,7 +249,7 @@ export class HexField {
       uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
       uRim: { value: new THREE.Color() }, uFace: { value: new THREE.Color() }, uSide: { value: new THREE.Color() },
       uFogColor: { value: new THREE.Color() },
-      uRowHz: { value: 60 }, uRowShift: { value: 0 }, uDiag: { value: 0 },
+      uRowHz: { value: 60 }, uRowShift: { value: 0 }, uDiag: { value: 0 }, uEmit: { value: 1 },
       ...Object.fromEntries(SHADER_LOOK_KEYS.map(k => ['u' + k[0].toUpperCase() + k.slice(1), { value: 0 }])),
     };
     this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader, fragmentShader });
@@ -300,6 +302,7 @@ export class HexField {
     u.uRim.value.copy(look.rim); u.uFace.value.copy(look.face); u.uSide.value.copy(look.side);
     u.uFogColor.value.copy(look.horizon);
     u.uDiag.value = { emission: 1, surface: 2 }[P.diag.view] || 0;
+    u.uEmit.value = P.macros.light;
     for (const k of SHADER_LOOK_KEYS) u['u' + k[0].toUpperCase() + k.slice(1)].value = look[k];
   }
 

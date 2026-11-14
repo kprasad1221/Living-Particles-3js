@@ -6,6 +6,8 @@ Particle studies for the browser, translated from Unity VFX Graph and TouchDesig
 
 **v0.2 · Precision pass** (branch `study-01-precision-pass`) follows the [development spec](https://app.notion.com/p/4121f16ba96281ff9f04f57fd9f2b046): separately controlled light terms, an editor grouped by what you change, analysis of decoded tracks ahead of playback with timestamped hits, finite particle budgets, a composed Plume phrase, and an experimental harmony → shimmer response.
 
+**v0.3 · Composed motion** (branch `study-01-composed-motion`) follows the [v0.3 plan](https://app.notion.com/p/4161f16ba96281389159f718d93137af): a repaired history, one bar for performing and an editor that shows one family at a time, and (in progress) palette ramps, receiving light and an authored score. See *What v0.3 changes*.
+
 ![AV2 · Tropical, standing view](docs/study-01/01_av2_tropical_stand.jpg)
 
 | Unity capture (AV3 · Funk) | This study (AV3 · Funk) |
@@ -26,14 +28,25 @@ No build step. three.js 0.186.0 loads from jsDelivr through the import map in `i
 
 ## Using it
 
-- **Music** (L): Pattern (built-in test music), Track, Mic, or Stress (the old synthetic spectrum, visual only). Drop audio anywhere on the page. Tracks stay in this browser (IndexedDB) and are never uploaded. A track is analysed in a worker when it is first played; the status line says *precise* when that is done (*basic* until then).
-- **Performance strip** (top): transport, A / Mix / B preview and the mix fader, and four scoped macros: Movement (× lift only), Sparks (× particles only), Glow (× bloom only), and the sensitivity of the mapping you are inspecting.
-- **Editor** (P): Looks · A / B, Light, Floor, Movement, Sparks, Plume, Music response, Interaction and camera, Scenes and performance. Every number can be typed, nudged with the arrow keys, and reset (double-click a label). A greyed control says why it has no effect right now.
-- **Music response**: inspect one mapping at a time. The meters under the floor show it as *measured* (dB) → *processed* (after gate and normalisation) → *output* (what the floor gets). **Solo response** shows only that destination; **Manual test** injects a level, a hit, or full harmony confidence after the detector.
+- **The bar** (top) is the one place for what you reach for while it plays:
+  - *Source*: what is playing and how it is analysed. Click it (or **L**) for **Music**: Pattern (built-in test music), Track, Mic, or Stress (the old synthetic spectrum, visual only). Drop audio anywhere on the page. Tracks stay in this browser (IndexedDB) and are never uploaded. A track is analysed in a worker when it is first played; the bar says *precise* when that is done (*basic* until then).
+  - *Transport*: play / pause, restart, loop, time.
+  - *Scene*: choose a scene (built in, saved, or saved with a track). **Revert** lights up once anything differs from the scene as loaded or last saved. **Save…** stores it under a name or with the playing track, and holds Export / Import JSON and Reset.
+  - *A / Mix / B* and the mix fader.
+  - *Three macros*, each scaling one thing: **Movement** (× maximum lift), **Activity** (× particle budgets), **Light** (× the light the tiles give off; glow is separate).
+- **Edit** (**E**) opens the editor, one family at a time: **Looks** (which world), **Motion** (how it travels), **Activity** (how much happens), **Light** (how the form reads), **Music response** (what the music can move), **Inspect** (why something happens). Looks and Light edit one look, A or B; the header says which and warns when that look is not on screen. Every number can be typed with its unit, nudged with the arrow keys, and reset (double-click a label). A greyed control says why it has no effect right now.
+- **Music response**: one mapping at a time. With this family or Inspect open, the meters under the floor show the mapping as *measured* (dB) → *processed* (after gate and normalisation) → *output* (what the floor gets). **Inspect** holds **Solo response**, **Manual test** (a level, a hit, or full harmony confidence injected after the detector) and the render views.
 - **Floor**: move the pointer over it (the hands in the Unity capture).
 - **Camera**: drag to orbit, scroll to zoom. **1** Stand · **2** Survey · **3** Low.
-- **Space** play/pause · **R** restart · **H** perform mode.
-- **Scenes**: *Save scene to this track* stores every control, both looks and the camera with that track; with *Recall* on it comes back when the track starts. Export / Import JSON, Restore last saved, Reset. *Load the Plume phrase scene* is a composed starting point.
+- **Space** play/pause · **R** restart · **E** editor · **L** music · **H** hide everything · **Esc** closes whatever is open. Keys never fire while you type in a field.
+- **Scenes** hold every control, both looks and the camera. A scene saved with a track comes back when that track starts (*Recall*, in Music). Scenes from v0.1 and v0.2 load as before; a scene from a newer build is refused with a message.
+
+## What v0.3 changes
+
+| Checkpoint | What changed | Evidence |
+|---|---|---|
+| P0 · Repaired baseline | The rim (b) and colour (a) history writes in `src/response.js` sat behind a line comment at `28e8c16`, so **rim breath** and **colour drift** never reached the floor while their meters moved. Restored. Also: a fall time of 0 ms is instant instead of NaN. | `node tools/history.test.mjs` (9 checks on what each history channel means); `capture.py check` item 8 (the two channels reach the picture); `docs/composed-motion/p0_before_vs_repaired.jpg` |
+| P1 · Interface | One bar instead of five panels: a single transport and a single A / Mix / B. The editor shows one family at a time. Meters appear only with the families that use them. Named scenes, Revert, and an "edited" state. The **Light** macro is new (× emission); **Activity** is the old Sparks macro, now named for everything it scales. | `python tools/flow.py` (the first-use path with real clicks and keys at 1440 and 390 px); `docs/composed-motion/p1_interface_*.jpg` |
 
 ## What v0.2 changed
 
@@ -101,7 +114,11 @@ It is a heuristic, not a probability, and not chord recognition. Dense mixes, mi
 cd tools
 npm install
 node fixtures.mjs                  # §8.1 waveform fixtures → captures/fixtures.json
+node history.test.mjs              # what each history channel means → captures/history.json
 python capture.py check            # §8.2 integration checks → captures/check.json
+python flow.py                     # first-use path with real clicks and keys, 1440 and 390 px → captures/flow.json
+python capture.py matched baseline # matched stills of a named set of scenes (rest / attack / crest / release)
+python compare.py grid A B out.jpg # pair two folders of matched stills into one labelled sheet
 python capture.py phrase           # matched rest / attack / crest / release on a composed excerpt
 python capture.py harmony          # harmony → shimmer off / on, and its meters
 python capture.py diag av2p        # composite / no glow / glow only / emission / surfaces
@@ -109,7 +126,7 @@ python capture.py motion av2 av2p  # orbiting-camera clips side by side
 python capture.py ui               # interface at 1440, 820 and 390 px
 ```
 
-Results at the end of the pass are in `docs/precision-pass/` (per checkpoint). In short: 16 of 16 waveform fixtures and all integration checks pass; worst single-tone error 0.43 cents; isolated-hit timestamps within 1.65 ms median / 4.75 ms 95th percentile of the attack; the same audio time gives identical history, event ids and spark births at 30, 60 and 120 Hz display rates.
+v0.3 results are in `docs/composed-motion/` (per checkpoint); v0.2 results are in `docs/precision-pass/`. For v0.2, in short: 16 of 16 waveform fixtures and all integration checks pass; worst single-tone error 0.43 cents; isolated-hit timestamps within 1.65 ms median / 4.75 ms 95th percentile of the attack; the same audio time gives identical history, event ids and spark births at 30, 60 and 120 Hz display rates.
 
 Not measured here: frame rate on a real GPU (these runs are software-rendered), and the look on real music. `phrase_excerpt.py` is synthetic music with known moments; judging the refined looks on a Daydream track is still to do.
 

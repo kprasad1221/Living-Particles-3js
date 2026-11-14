@@ -14,12 +14,17 @@
 //       map, pointer, sparks, macros); timing shown as time-to-90 % in ms
 //    5  checkpoint 5: plume group added (older scenes get the defaults, plume off)
 //    6  checkpoint 6: harmony group added (experimental, off for older saves)
+//    7  v0.3 · P1: Light macro added (macros.light, × emission; older saves get 1). Nothing renamed:
+//       the bar's "Activity" is the same value as before (macros.sparks), now also labelled for plumes.
 //  Later checkpoints append steps here.
+//
+//  A scene saved by a newer build (schema above SCHEMA) is refused with a message instead of
+//  being read as though it were understood.
 // ─────────────────────────────────────────────────────────────────────────────
 import { P, VERSION } from './params.js';
 import { isLegacy, fromLegacy } from './looks.js';
 
-export const SCHEMA = 6;
+export const SCHEMA = 7;
 
 // Groups of P written into a scene. Everything else in P is transient.
 export const SAVED_GROUPS = () => Object.keys(P).filter(k => !TRANSIENT.includes(k) && k !== 'looks');
@@ -58,10 +63,19 @@ const STEPS = {
   // 4 → 5: new group only; nothing renamed. Missing groups keep their defaults on apply.
   4: s => { s.schema = 5; return s; },
   5: s => { s.schema = 6; return s; },
+  6: s => { s.schema = 7; return s; },
 };
 
+// Can this build read the scene? Returns { ok, message }.
+export function compatibility(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, message: 'That file is not a scene.' };
+  if (Number.isInteger(input.schema) && input.schema > SCHEMA)
+    return { ok: false, message: `This scene was saved by a newer version (schema ${input.schema}); this build reads up to ${SCHEMA}. Nothing was changed.` };
+  return { ok: true, message: '' };
+}
+
 export function migrate(input) {
-  if (!input || typeof input !== 'object') return null;
+  if (!compatibility(input).ok) return null;
   let s = JSON.parse(JSON.stringify(input));
   if (!Number.isInteger(s.schema)) s.schema = 1;              // study-01/0.1.0 saves had no schema field
   const from = s.schema;

@@ -1,0 +1,85 @@
+{
+  "a": "P0 repaired baseline (7fc5da0)",
+  "b": "P1 interface (this commit)",
+  "labels": [
+    "P0",
+    "P1"
+  ],
+  "set": "baseline",
+  "camera": "stand",
+  "pairs": {
+    "av2p|av2p|rest": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 108.75,
+      "levelB": 108.75,
+      "changedPixelsPct": 0.0
+    },
+    "av2p|av2p|attack": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 114.04,
+      "levelB": 114.04,
+      "changedPixelsPct": 0.0
+    },
+    "av2p|av2p|crest": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 116.73,
+      "levelB": 116.73,
+      "changedPixelsPct": 0.0
+    },
+    "av2p|av2p|release": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 109.77,
+      "levelB": 109.77,
+      "changedPixelsPct": 0.0
+    },
+    "nocturne|nocturne|rest": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 15.89,
+      "levelB": 15.89,
+      "changedPixelsPct": 0.0
+    },
+    "nocturne|nocturne|attack": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 42.06,
+      "levelB": 42.06,
+      "changedPixelsPct": 0.0
+    },
+    "nocturne|nocturne|crest": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 69.42,
+      "levelB": 69.42,
+      "changedPixelsPct": 0.0
+    },
+    "nocturne|nocturne|release": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 29.93,
+      "levelB": 29.93,
+      "changedPixelsPct": 0.0
+    },
+    "plume|plume|rest": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 14.07,
+      "levelB": 14.07,
+      "changedPixelsPct": 0.0
+    },
+    "plume|plume|attack": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 40.06,
+      "levelB": 40.06,
+      "changedPixelsPct": 0.0
+    },
+    "plume|plume|crest": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 43.62,
+      "levelB": 43.62,
+      "changedPixelsPct": 0.0
+    },
+    "plume|plume|release": {
+      "meanAbsDiff8bit": 0.0,
+      "levelA": 19.87,
+      "levelB": 19.87,
+      "changedPixelsPct": 0.0
+    }
+  },
+  "note": "The interface change and the new Light macro at 1 leave the picture unchanged: every pair is identical."
+}

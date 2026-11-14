@@ -15,7 +15,7 @@
 //  are written once into instanced buffers when the field is built.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const VERSION = 'study-01/0.2.0';
+export const VERSION = 'study-01/0.3.0';
 
 export const SIM_HZ = 60;          // fixed simulation clock (analysis + history), as in Audio Geology
 export const NB = 8;               // voices
@@ -153,9 +153,10 @@ export const P = {
 
   // PERFORMANCE MACROS — each scales exactly one thing, nothing else.
   macros: {
-    movement: 1,           // × maximum lift
-    sparks: 1,             // × particles per hit and continuous emission
-    glow: 1,               // × glow amount (bloom strength)
+    movement: 1,           // × maximum lift                                        (bar: Movement)
+    sparks: 1,             // × particles per hit, continuous emission, plume count  (bar: Activity)
+    light: 1,              // × the light the tiles give off (emission)              (bar: Light)
+    glow: 1,               // × glow amount (bloom strength)                         (Edit › Light › Output)
   },
 
   // OUTPUT — Look A and Look B are full copies of a look; what you see is mix(A, B, morph).

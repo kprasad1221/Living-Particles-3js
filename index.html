@@ -17,26 +17,17 @@
 }
 </script>
 </head>
-<body>
+<body class="mode-perform">
 <canvas id="stage" aria-label="Audio-reactive hex particle field. Drag to orbit, scroll to zoom, move the pointer over the floor to touch it."></canvas>
 
 <div class="ui" id="ui">
 
-  <header class="hud">
-    <p class="micro">Pixel Rhythms Labs</p>
-    <h1>Living Particles</h1>
-    <p class="sub">Study 01 · Hex Field</p>
-    <p class="now" id="nowPlaying">Test pattern</p>
-  </header>
+  <!-- The one place for source, transport, scene, look mix and the three macros (src/ui/bar.js). -->
+  <header class="bar" id="bar" role="toolbar" aria-label="Performance"></header>
 
-  <nav class="toggles" aria-label="Panels">
-    <button type="button" class="chip" id="libBtn" aria-expanded="true" aria-controls="library">Music <kbd>L</kbd></button>
-    <button type="button" class="chip" id="paneBtn" aria-expanded="true" aria-controls="paneWrap">Controls <kbd>P</kbd></button>
-    <button type="button" class="chip" id="hideBtn">Perform <kbd>H</kbd></button>
-  </nav>
-
-  <aside class="drawer library" id="library" aria-label="Music">
-    <div class="drawer-head"><h2>Music</h2><span class="hint">Daydream sketches, stems, anything</span></div>
+  <aside class="drawer library" id="library" aria-label="Music" hidden>
+    <div class="drawer-head"><h2>Music</h2><span class="hint">Daydream sketches, stems, anything</span>
+      <button type="button" class="x" id="libClose" aria-label="Close music">×</button></div>
 
     <div class="seg seg4" role="group" aria-label="Source">
       <button type="button" data-source="pattern" aria-pressed="true" title="Built-in test pattern, rendered as audio (precise analysis)">Pattern</button>
@@ -44,6 +35,7 @@
       <button type="button" data-source="mic" aria-pressed="false" title="Microphone (Live · basic analysis)">Mic</button>
       <button type="button" data-source="stress" aria-pressed="false" title="The original synthetic spectrum: a visual stress test, silent">Stress</button>
     </div>
+    <p class="source-note" id="sourceNote" role="status"></p>
 
     <label class="drop" id="drop" for="fileInput">
       <span class="drop-main">Drop audio files here</span>
@@ -54,35 +46,27 @@
     <ol class="tracks" id="tracks" aria-label="Tracks"></ol>
     <p class="empty" id="emptyNote">No tracks yet. Drop a few and they stay here between visits.</p>
 
-    <div class="transport">
-      <button type="button" class="btn" id="playBtn">Pause</button>
-      <button type="button" class="btn" id="restartBtn">Restart</button>
-      <label class="check"><input type="checkbox" id="loopChk" checked> Loop</label>
-    </div>
-    <div class="progress" aria-hidden="true"><div id="progBar"></div></div>
-    <p class="time" id="timeLine">—</p>
-
     <div class="scene-box">
-      <button type="button" class="btn wide" id="saveSceneBtn" disabled>Save scene to this track</button>
       <label class="check"><input type="checkbox" id="recallChk" checked> Recall a track's scene when it starts</label>
       <label class="check"><input type="checkbox" id="rememberChk" checked> Keep tracks in this browser</label>
-      <p class="explain">Tracks are stored in this browser only (IndexedDB) and never uploaded. A scene is every control plus both looks and the camera.</p>
+      <p class="explain">Tracks are stored in this browser only (IndexedDB) and never uploaded. Play, restart and loop are in the bar; Save in the bar can store the scene with the playing track.</p>
     </div>
   </aside>
 
-  <div class="pane-wrap" id="paneWrap"><div id="pane"></div></div>
+  <div class="pane-wrap" id="paneWrap" hidden><div id="pane"></div></div>
 
-  <section class="voices" aria-label="Voices and the inspected mapping">
+  <section class="voices" id="voices" aria-label="Voices and the inspected mapping" hidden>
     <canvas id="meters" width="900" height="150" aria-label="Voice history, fine spectrum and the inspected mapping's meters"></canvas>
   </section>
-
-  <div class="strip" id="strip" role="group" aria-label="Performance"></div>
 
   <div class="cams" role="group" aria-label="Camera">
     <button type="button" class="chip" data-cam="stand" aria-pressed="true">Stand <kbd>1</kbd></button>
     <button type="button" class="chip" data-cam="survey" aria-pressed="false">Survey <kbd>2</kbd></button>
     <button type="button" class="chip" data-cam="low" aria-pressed="false">Low <kbd>3</kbd></button>
   </div>
+
+  <!-- Only visible while everything else is hidden (H). -->
+  <button type="button" class="chip show-ui" id="showBtn" hidden>Show controls <kbd>H</kbd></button>
 </div>
 
 <div class="dropveil" id="dropveil" hidden><p>Drop to add to the library</p></div>
