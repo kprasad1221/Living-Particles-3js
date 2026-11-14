@@ -12,21 +12,49 @@
 //    nocturne        a night version leaning toward Tetris Effect's dark stages
 //    av2p Precision  AV2 rebuilt for edge/interior separation (precision pass, CP2)
 //
+//  v0.3 · P2 adds two things to every look, both off for the looks above so they render as before:
+//    ramps    colour by role instead of by voice: a body ramp (a tile's activation → shadow, body,
+//             crest) and a small accent ramp (events: hits, sparks, plume). `ramp` blends from the
+//             voice colours (0) to the ramps (1), so the two can be compared on one fader.
+//    light    one local light that the surfaces receive (not emission, so it never blooms on its own)
+//  and two looks built on them:
+//    mineral   Mineral Night        deep blue body, cyan and pearl crests, a small amber accent, dark gaps
+//    daylight  Daylight Precision   readable stone faces, a restrained sky, coloured rims, local highlights
+//  Their palettes are working art direction, not colours sampled from a reference.
+//
 //  The AV looks are read off the Unity capture (a phone photo of a monitor): use
 //  them for edge/interior relationships and hierarchy, not as calibrated colours.
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
+import { sanitizeStops, sanitizePalette, bakeRows, mixBaked, stopsKey, PALETTE_SCHEMA } from './shared/palette.js';
 
 export const LOOK_KEYS = {
-  colors: ['v0', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'rim', 'face', 'side', 'skyTop', 'horizon'],
+  colors: ['v0', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'rim', 'face', 'side', 'skyTop', 'horizon', 'lightColor'],
   numbers: [
     'rimWidth', 'restRim', 'rimBreath', 'rimResponse', 'innerSpill', 'spillFalloff',
     'fill', 'fillCore', 'sideGlow', 'sideFalloff', 'topLine', 'edgeLines',
     'hitAccent', 'hitWhiten', 'grain', 'sparkCore',
     'fog', 'horizonGlow',
     'bloom', 'bloomRadius', 'bloomThreshold', 'bloomSky', 'exposure',
+    'ramp', 'rampCurve', 'rampSpread', 'accent',             // colour by role (v0.3)
+    'lightAmount', 'lightReach', 'lightHeight',               // receiving light (v0.3)
   ],
+  ramps: ['rampBody', 'rampAccent'],                          // ordered stops: [{ id, position, color }]
 };
+// Rows of the ramp texture, in order. The shaders sample row r at v = (r + 0.5) / RAMP_ROWS.length.
+export const RAMP_ROWS = ['rampBody', 'rampAccent'];
+
+// What a look gets when it does not say (every look made before v0.3): ramps off, light off, and
+// ramps drawn from its own voice colours, so turning `ramp` up on an old look stays in its world.
+export function rampDefaults(l) {
+  return {
+    ramp: 0, rampCurve: 1, rampSpread: 0.35, accent: 0.8,
+    lightAmount: 0, lightReach: 16, lightHeight: 6, lightColor: '#ffe2b8',
+    rampBody: [{ id: 'shadow', position: 0, color: l.side }, { id: 'deep', position: 0.3, color: l.v0 }, { id: 'body', position: 0.65, color: l.v2 }, { id: 'crest', position: 1, color: l.v7 }],
+    rampAccent: [{ id: 'ember', position: 0, color: l.v5 }, { id: 'accent', position: 0.55, color: l.v3 }, { id: 'flare', position: 1, color: l.v7 }],
+  };
+}
+const withRampDefaults = l => ({ ...rampDefaults(l), ...l });
 // Look values the tile shader reads directly as uniforms.
 export const SHADER_LOOK_KEYS = ['rimWidth', 'restRim', 'rimBreath', 'rimResponse', 'innerSpill', 'spillFalloff',
   'fill', 'fillCore', 'sideGlow', 'sideFalloff', 'topLine', 'edgeLines', 'hitAccent', 'hitWhiten', 'grain', 'fog'];
@@ -84,7 +112,7 @@ const LEGACY = {
   },
 };
 
-export const LOOKS = Object.fromEntries(Object.entries(LEGACY).map(([k, l]) => [k, fromLegacy(l)]));
+export const LOOKS = Object.fromEntries(Object.entries(LEGACY).map(([k, l]) => [k, withRampDefaults(fromLegacy(l))]));
 
 // AV2 · Precision. Tuned with bloom off first, then glow restored from emission only:
 // rims carry the colour, interiors stay dark, the white flash is gone, the sky never blooms.
@@ -101,20 +129,89 @@ LOOKS.av2p = {
   bloom: 0.2, bloomRadius: 0.25, bloomThreshold: 1.1, bloomSky: 0.0, exposure: 0.92,
 };
 
-export const LOOK_ORDER = ['av2p', 'av1', 'av2', 'av3', 'nocturne'];
+// Mineral Night. Compare with Nocturne under identical motion. The resting grid is dim so gaps stay
+// dark; a tile climbs its ramp as it lights (deep blue → cyan → pearl); hits and particles take the
+// small amber family; one warm light crosses the faces.
+LOOKS.mineral = {
+  name: 'Mineral Night',
+  v0: '#1438c8', v1: '#1a55d8', v2: '#1e7ee6', v3: '#22a4ee', v4: '#3cc0f2', v5: '#7fd6f6', v6: '#b8e8fb', v7: '#e6f6ff',   // the body ramp by register (meters, and ramp < 1)
+  rim: '#123a5c', face: '#03060c', side: '#070d18', skyTop: '#01030a', horizon: '#060d1c',
+  rimWidth: 0.09, restRim: 0.38, rimBreath: 0.5, rimResponse: 1.1, innerSpill: 0.1, spillFalloff: 7,
+  fill: 0.42, fillCore: 0.1, sideGlow: 0.95, sideFalloff: 3.2, topLine: 0.9, edgeLines: 0.25,
+  hitAccent: 1.4, hitWhiten: 0, grain: 0.15, sparkCore: 0.12,
+  fog: 0.007, horizonGlow: 0.22,
+  bloom: 0.45, bloomRadius: 0.35, bloomThreshold: 0.75, bloomSky: 0, exposure: 1.0,
+  ramp: 1, rampCurve: 1.15, rampSpread: 0.75, accent: 1,
+  rampBody: [{ id: 'shadow', position: 0, color: '#0a1840' }, { id: 'deep', position: 0.32, color: '#1438c8' }, { id: 'body', position: 0.68, color: '#22b8f0' }, { id: 'crest', position: 1, color: '#e6f6ff' }],
+  rampAccent: [{ id: 'ember', position: 0, color: '#7a2c08' }, { id: 'amber', position: 0.5, color: '#ff9a2e' }, { id: 'flare', position: 1, color: '#ffe9b0' }],
+  lightAmount: 1.1, lightReach: 20, lightHeight: 3.5, lightColor: '#ffd2a0',
+};
+// Daylight Precision. Compare with AV2 · Precision under identical motion. Faces are stone you can
+// read with every emission term off; the grid at rest is a joint, not a glow; colour lives on rims
+// and in a few local highlights; the sky is quieter.
+LOOKS.daylight = {
+  name: 'Daylight Precision',
+  v0: '#16408f', v1: '#1757b5', v2: '#1670c9', v3: '#148fc9', v4: '#10abc9', v5: '#3fc3d6', v6: '#86dceb', v7: '#c6f5fb',
+  rim: '#2a2f3a', face: '#6f6a66', side: '#3d3a3c', skyTop: '#6f86ad', horizon: '#c9cfd8',
+  rimWidth: 0.12, restRim: 0.2, rimBreath: 0.25, rimResponse: 1.3, innerSpill: 0.06, spillFalloff: 8,
+  fill: 0.16, fillCore: 0, sideGlow: 0.8, sideFalloff: 3.6, topLine: 1.0, edgeLines: 0.2,
+  hitAccent: 1.0, hitWhiten: 0, grain: 0.5, sparkCore: 0.15,
+  fog: 0.006, horizonGlow: 0.2,
+  bloom: 0.16, bloomRadius: 0.25, bloomThreshold: 1.15, bloomSky: 0, exposure: 0.9,
+  ramp: 1, rampCurve: 1.0, rampSpread: 0.7, accent: 1,
+  rampBody: [{ id: 'shadow', position: 0, color: '#16305e' }, { id: 'deep', position: 0.4, color: '#1763c9' }, { id: 'body', position: 0.78, color: '#10b5c9' }, { id: 'crest', position: 1, color: '#c6f5fb' }],
+  rampAccent: [{ id: 'ember', position: 0, color: '#8a3a12' }, { id: 'amber', position: 0.5, color: '#ff7a1a' }, { id: 'flare', position: 1, color: '#ffd27a' }],
+  lightAmount: 0.7, lightReach: 22, lightHeight: 7, lightColor: '#fff0d8',
+};
+
+export const LOOK_ORDER = ['av2p', 'av1', 'av2', 'av3', 'nocturne', 'mineral', 'daylight'];
+
+// A look's ramps as a palette asset (src/shared/palette.js): the part of a look another world can use.
+// The hex field reads `body` by a tile's level and `accent` by an event's strength; another world is
+// free to read the same ramps by something else (a ribbon's age, a branch's height).
+const slug = s => String(s || 'palette').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'palette';
+export function lookToPalette(l, source = { kind: 'authored', note: 'Working art direction; not sampled from a reference.' }) {
+  return {
+    schema: PALETTE_SCHEMA, id: slug(l.name), version: 1, name: l.name || 'Palette', source, inputColorSpace: 'srgb',
+    ramps: {
+      body: { role: 'emission', domain: 'activation', curve: l.rampCurve, emissionScale: 1, stops: JSON.parse(JSON.stringify(l.rampBody)) },
+      accent: { role: 'accent', domain: 'event', curve: 1, emissionScale: 1, stops: JSON.parse(JSON.stringify(l.rampAccent)) },
+    },
+  };
+}
+// Put a palette's ramps into a look. Returns { ok, message }; the look is untouched unless ok.
+export function applyPalette(l, input) {
+  const r = sanitizePalette(input);
+  if (!r.ok) return { ok: false, message: r.message };
+  const { body, accent } = r.palette.ramps;
+  if (!body && !accent) return { ok: false, message: 'The palette has no "body" or "accent" ramp.' };
+  if (body) { l.rampBody = body.stops; l.rampCurve = body.curve; }
+  if (accent) l.rampAccent = accent.stops;
+  return { ok: true, message: '', name: r.palette.name };
+}
 
 export function cloneLook(l) { return JSON.parse(JSON.stringify(l)); }
 
 const ca = new THREE.Color(), cb = new THREE.Color();
+const baked = new Map();           // stops of one look → linear ramp rows (bounded cache)
+function bakeLook(l) {
+  const key = RAMP_ROWS.map(k => stopsKey(l[k])).join('§');
+  let data = baked.get(key);
+  if (!data) { data = bakeRows(RAMP_ROWS.map(k => l[k])); baked.set(key, data); if (baked.size > 24) baked.delete(baked.keys().next().value); }
+  return { key, data };
+}
 
-// Mix two looks into `out`: colours become THREE.Color (linear), numbers mix linearly.
-// Colour pickers give sRGB hex; THREE.Color.set converts to linear once, here.
+// Mix two looks into `out`: colours become THREE.Color (linear), numbers mix linearly, ramps mix
+// in linear after baking (out.rampLinear; out.rampVersion counts changes so a texture knows when
+// to upload). Colour pickers give sRGB hex; THREE.Color.set converts to linear once, here.
 export function mixLooks(a, b, t, out) {
   for (const k of LOOK_KEYS.colors) {
     ca.set(a[k]); cb.set(b[k]);
     (out[k] ||= new THREE.Color()).copy(ca).lerp(cb, t);
   }
   for (const k of LOOK_KEYS.numbers) out[k] = a[k] + (b[k] - a[k]) * t;
+  const A = bakeLook(a), B = bakeLook(b), sig = `${A.key}>${B.key}@${t.toFixed(4)}`;
+  if (out.rampSig !== sig) { out.rampLinear = mixBaked(A.data, B.data, t, out.rampLinear); out.rampSig = sig; out.rampVersion = (out.rampVersion | 0) + 1; }
   return out;
 }
 
@@ -125,8 +222,12 @@ export function sanitizeLook(src, fallback) {
   const l = cloneLook(base);
   if (!src) return l;
   if (isLegacy(src)) src = fromLegacy(src);
+  // A look saved before v0.3 has no ramps or light of its own: it gets ramps off, light off and ramps drawn
+  // from its own colours, never the fallback look's.
+  if (!('ramp' in src)) src = { ...src, ...rampDefaults({ ...l, ...Object.fromEntries(LOOK_KEYS.colors.filter(k => typeof src[k] === 'string' && /^#[0-9a-f]{6}$/i.test(src[k])).map(k => [k, src[k]])) }) };
   for (const k of LOOK_KEYS.colors) if (typeof src[k] === 'string' && /^#[0-9a-f]{6}$/i.test(src[k])) l[k] = src[k];
   for (const k of LOOK_KEYS.numbers) if (Number.isFinite(src[k])) l[k] = src[k];
+  for (const k of LOOK_KEYS.ramps) l[k] = sanitizeStops(src[k], l[k]);
   if (typeof src.name === 'string') l.name = src.name.slice(0, 60);
   return l;
 }

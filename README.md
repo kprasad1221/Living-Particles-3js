@@ -47,6 +47,7 @@ No build step. three.js 0.186.0 loads from jsDelivr through the import map in `i
 |---|---|---|
 | P0 · Repaired baseline | The rim (b) and colour (a) history writes in `src/response.js` sat behind a line comment at `28e8c16`, so **rim breath** and **colour drift** never reached the floor while their meters moved. Restored. Also: a fall time of 0 ms is instant instead of NaN. | `node tools/history.test.mjs` (9 checks on what each history channel means); `capture.py check` item 8 (the two channels reach the picture); `docs/composed-motion/p0_before_vs_repaired.jpg` |
 | P1 · Interface | One bar instead of five panels: a single transport and a single A / Mix / B. The editor shows one family at a time. Meters appear only with the families that use them. Named scenes, Revert, and an "edited" state. The **Light** macro is new (× emission); **Activity** is the old Sparks macro, now named for everything it scales. | `python tools/flow.py` (the first-use path with real clicks and keys at 1440 and 390 px); `docs/composed-motion/p1_interface_*.jpg` |
+| P2 · Looks and light | **Colour by role**: a look can colour tiles from two ramps instead of eight voice colours. The *body* ramp places a lit tile by its voice's level (shadow → body → crest), with low voices kept in the deep end; the *accent* ramp colours events (hits, sparks, plume). One fader, *Colour from*, runs from voices to ramps. **Received light**: one local light that faces and sides receive by their normals; it is not emission, so it does not feed the glow. Two looks use both: **Mineral Night** (compare with Nocturne) and **Daylight Precision** (compare with AV2 · Precision); each has a built-in scene with the look it answers in B. Every earlier look renders exactly as before. Ramps export and import as palette files (`palettes/`). | `node tools/palette.test.mjs` (8); `python tools/looks_check.py` (8); `docs/composed-motion/p2_*.jpg` |
 
 ## What v0.2 changed
 
@@ -60,6 +61,16 @@ No build step. three.js 0.186.0 loads from jsDelivr through the import map in `i
 | Plume | One authored gesture per hit on a chosen voice: emerge, rise, curl, disperse, rest (0–80 / 80–250 / 250–900 / 900–1600 ms at length 1.6 s), at most N at once. |
 | Harmony | Experimental: a held fifth between two detected notes makes the rims twinkle. Off by default. |
 | Scenes | Schema 6. Study 01 saves (schema 1) migrate step by step; nothing is discarded. Imports are validated (finite numbers, valid ranges, floor < ceiling). |
+
+## Pieces another sketch can take
+
+`src/shared/` holds modules with no three.js and no app state, written to be copied into Audio Geology or a new world (see `src/shared/README.md` for what each one promises and what stays local to a world).
+
+| Module | What it is | First consumer here |
+|---|---|---|
+| `palette.js` | Colour ramps as a small versioned asset: stops with stable names, sRGB in, linear out, bake to a strip, mix two palettes, check a file. | `looks.js` (two ramps per look), `world/ramptex.js` (the texture) |
+
+Palette files live in `palettes/`. A world decides what a ramp's position means: here a tile's level; in Audio Geology it could be a ribbon's age; in the Stellar Tide Court study, height along a branch.
 
 ## Audio analysis
 
@@ -117,7 +128,9 @@ node fixtures.mjs                  # §8.1 waveform fixtures → captures/fixtur
 node history.test.mjs              # what each history channel means → captures/history.json
 python capture.py check            # §8.2 integration checks → captures/check.json
 python flow.py                     # first-use path with real clicks and keys, 1440 and 390 px → captures/flow.json
-python capture.py matched baseline # matched stills of a named set of scenes (rest / attack / crest / release)
+node palette.test.mjs              # ramps and palette files (colour handling, repair, value structure) → captures/palette.json
+python looks_check.py              # ramps, accent, received light, scene and palette round trips → captures/looks_check.json
+python capture.py matched baseline # matched stills of a named set of scenes (rest / attack / crest / release); also: looks
 python compare.py grid A B out.jpg # pair two folders of matched stills into one labelled sheet
 python capture.py phrase           # matched rest / attack / crest / release on a composed excerpt
 python capture.py harmony          # harmony → shimmer off / on, and its meters

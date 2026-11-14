@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "id": "mineral-night",
+  "version": 1,
+  "name": "Mineral Night",
+  "source": {
+    "kind": "authored",
+    "note": "Working art direction; not sampled from a reference."
+  },
+  "inputColorSpace": "srgb",
+  "ramps": {
+    "body": {
+      "role": "emission",
+      "domain": "activation",
+      "curve": 1.15,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "shadow",
+          "position": 0,
+          "color": "#0a1840"
+        },
+        {
+          "id": "deep",
+          "position": 0.32,
+          "color": "#1438c8"
+        },
+        {
+          "id": "body",
+          "position": 0.68,
+          "color": "#22b8f0"
+        },
+        {
+          "id": "crest",
+          "position": 1,
+          "color": "#e6f6ff"
+        }
+      ]
+    },
+    "accent": {
+      "role": "accent",
+      "domain": "event",
+      "curve": 1,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "ember",
+          "position": 0,
+          "color": "#7a2c08"
+        },
+        {
+          "id": "amber",
+          "position": 0.5,
+          "color": "#ff9a2e"
+        },
+        {
+          "id": "flare",
+          "position": 1,
+          "color": "#ffe9b0"
+        }
+      ]
+    }
+  }
+}

@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import { P, VERSION, NB, VOICE_NAMES, FFT_SIZE, LOW_FFT_SIZE } from './params.js';
-import { LOOKS, cloneLook, mixLooks, sanitizeLook } from './looks.js';
+import { LOOKS, cloneLook, mixLooks, sanitizeLook, lookToPalette, applyPalette } from './looks.js';
 import { FixedClock, SIM_DT } from './clock.js';
 import { Sources } from './audio.js';
 import { response, historySeconds, histAt } from './response.js';
@@ -68,6 +68,7 @@ field.build(P.floor);
 stage.scene.add(field.mesh);
 const sparks = new Sparks();
 sparks.reseed(P.floor.seed);
+sparks.uniforms.uRamp.value = field.ramp.texture;        // one ramp texture, shared
 stage.scene.add(sparks.points);
 let diagBefore = 0;
 stage.emissionHook = on => { const u = field.uniforms.uDiag; if (on) { diagBefore = u.value; u.value = 1; } else u.value = diagBefore; };
@@ -206,6 +207,23 @@ app.saveUserLook = () => {
   store.set('lp.looks', app.userLooks);
   P.looks[P.looks.edit] = 'user:' + name;
 };
+// The edited look's ramps as a palette file (the reusable asset), and back.
+app.exportPalette = () => {
+  const look = P.looks.edit === 'b' ? app.lookB : app.lookA, pal = lookToPalette(look);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(pal, null, 2)], { type: 'application/json' })); a.download = `palette_${pal.id}.json`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+app.applyPalette = obj => { const r = applyPalette(P.looks.edit === 'b' ? app.lookB : app.lookA, obj); if (r.ok) { panel?.refresh(); autosave(); } return r; };
+app.importPalette = done => {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = async () => {
+    let r;
+    try { r = app.applyPalette(JSON.parse(await inp.files[0].text())); } catch (e) { r = { ok: false, message: 'That file could not be read as JSON.' }; }
+    done?.(r);
+  };
+  inp.click();
+};
 app.effectiveMorph = () => (P.looks.preview === 'a' ? 0 : P.looks.preview === 'b' ? 1 : P.looks.morph);
 function updateMorph(dt) {
   const d = P.looks.drive;
@@ -287,6 +305,16 @@ const BUILTIN = {
     Object.assign(d.plume, { on: true, voice: 1 });
     const lookA = { ...LOOKS.nocturne, restRim: 0.35, rimBreath: 0.9, fill: 0.5, bloom: 0.55, bloomThreshold: 0.7, bloomSky: 0, hitWhiten: 0.2, name: 'Nocturne · plume' };
     return { ...header(), ...d, view: standView(), looks: { ...d.looks, a: 'nocturne', b: 'av2p', morph: 0, lookA, lookB: LOOKS.av2p } };
+  } },
+  // v0.3 · P2: each new look in A with the look it answers in B, on the default scene's motion, so
+  // A / Mix / B in the bar is the comparison.
+  mineral: { label: 'Mineral Night  (B: Nocturne)', make() {
+    const d = clone(DEFAULTS);
+    return { ...header(), ...d, view: standView(), looks: { ...d.looks, a: 'mineral', b: 'nocturne', morph: 0, lookA: LOOKS.mineral, lookB: LOOKS.nocturne } };
+  } },
+  daylight: { label: 'Daylight Precision  (B: AV2 Precision)', make() {
+    const d = clone(DEFAULTS);
+    return { ...header(), ...d, view: standView(), looks: { ...d.looks, a: 'daylight', b: 'av2p', morph: 0, lookA: LOOKS.daylight, lookB: LOOKS.av2p } };
   } },
 };
 app.builtinScenes = BUILTIN;
@@ -616,7 +644,7 @@ function draw(dt, timing) {
   updateMorph(dt);
   mixLooks(app.lookA, app.lookB, app.effectiveMorph(), app.mixed);
   stage.update(dt, app.mixed, state.visualTime);
-  field.sync(app.mixed, state.visualTime, stage.affector, timing);
+  field.sync(app.mixed, state.visualTime, stage.affector, timing, response.lift[P.light.source] ?? 1);
   sparks.sync(app.mixed, state.visualTime, stage.pixelScale);
   renderer.info.reset();
   stage.render();

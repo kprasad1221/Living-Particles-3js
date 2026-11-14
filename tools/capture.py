@@ -305,6 +305,24 @@ SETS = {
     'nocturne': "lp.app.resetScene(); lp.app.loadLook('a', 'nocturne'); lp.P.looks.preview = 'a';",
     'plume':    "lp.app.loadPlumeScene(); lp.P.looks.preview = 'a';",
   },
+  # v0.3 · P2: the two new looks beside the looks they answer, identical motion (the default scene's).
+  # *_voices: the same new look with colour taken from its voice colours instead of its ramps (ramp = 0).
+  # *_nolight: the same new look with the receiving light off.
+  'looks': {
+    'nocturne':         "lp.app.resetScene(); lp.app.loadLook('a', 'nocturne'); lp.P.looks.preview = 'a';",
+    'mineral':          "lp.app.resetScene(); lp.app.loadLook('a', 'mineral'); lp.P.looks.preview = 'a';",
+    'mineral_voices':   "lp.app.resetScene(); lp.app.loadLook('a', 'mineral'); lp.app.lookA.ramp = 0; lp.P.looks.preview = 'a';",
+    'mineral_nolight':  "lp.app.resetScene(); lp.app.loadLook('a', 'mineral'); lp.app.lookA.lightAmount = 0; lp.P.looks.preview = 'a';",
+    'av2p':             "lp.app.resetScene(); lp.app.loadLook('a', 'av2p'); lp.P.looks.preview = 'a';",
+    'daylight':         "lp.app.resetScene(); lp.app.loadLook('a', 'daylight'); lp.P.looks.preview = 'a';",
+    'daylight_voices':  "lp.app.resetScene(); lp.app.loadLook('a', 'daylight'); lp.app.lookA.ramp = 0; lp.P.looks.preview = 'a';",
+    'daylight_nolight': "lp.app.resetScene(); lp.app.loadLook('a', 'daylight'); lp.app.lookA.lightAmount = 0; lp.P.looks.preview = 'a';",
+    # the same new looks taken apart: glow off (form has to read without it), and the received light alone
+    'mineral_noglow':   "lp.app.resetScene(); lp.app.loadLook('a', 'mineral'); lp.P.looks.preview = 'a'; lp.P.diag.view = 'nobloom';",
+    'daylight_noglow':  "lp.app.resetScene(); lp.app.loadLook('a', 'daylight'); lp.P.looks.preview = 'a'; lp.P.diag.view = 'nobloom';",
+    'mineral_lightonly':  "lp.app.resetScene(); lp.app.loadLook('a', 'mineral'); lp.P.looks.preview = 'a'; lp.P.diag.view = 'light';",
+    'daylight_lightonly': "lp.app.resetScene(); lp.app.loadLook('a', 'daylight'); lp.P.looks.preview = 'a'; lp.P.diag.view = 'light';",
+  },
 }
 VIEW = (1440, 900)
 
@@ -332,7 +350,7 @@ async def matched(set_name='baseline', cams=('stand',), extra_js=''):
         res['version'] = await page.evaluate("window.__lp.VERSION")
         await page.evaluate(ui_js(True))
         for name, js in SETS[set_name].items():
-            await page.evaluate(f"() => {{ const lp = window.__lp; {js} lp.P.pointer.on = false; lp.sparks.seed = 1; {extra_js} }}")
+            await page.evaluate(f"() => {{ const lp = window.__lp; lp.P.diag.view = 'normal'; {js} lp.P.pointer.on = false; lp.sparks.seed = 1; {extra_js} }}")
             for label, t in MOMENTS.items():
                 for cam in cams:
                     await page.evaluate(f"window.__lp.goTo('{cam}')")

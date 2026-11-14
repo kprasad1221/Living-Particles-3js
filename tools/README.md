@@ -17,7 +17,9 @@ python capture.py phrase                 # matched rest / attack / crest / relea
 python capture.py harmony                # harmony → shimmer off / on and its meters
 python capture.py ui                     # Perform and Edit at 1440, 820 and 390 px
 python flow.py                           # the first-use path with real clicks and keys at 1440 and 390 px → captures/flow.json
-python capture.py matched baseline       # matched stills for a named set of scenes (SETS in capture.py)
+node palette.test.mjs                    # ramps and palette files, no browser (--write regenerates palettes/*.json from the looks)
+python looks_check.py                    # ramps, accent, received light, scene and palette round trips; and the light study sheets
+python capture.py matched baseline       # matched stills for a named set of scenes (SETS in capture.py: baseline, looks)
 python compare.py grid DIR_A DIR_B out.jpg --labels before after --set baseline   # pair two folders into one sheet + differences
 python phrase_excerpt.py out.wav         # the composed 20 s excerpt on its own (synthetic music)
 ```

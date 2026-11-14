@@ -1,0 +1,102 @@
+{
+  "ramp_is_srgb_interpolated_and_linear_out": {
+    "pass": true,
+    "midGreyLinear": 0.21404,
+    "strip_0_128_255": [
+      0,
+      128,
+      255
+    ]
+  },
+  "stops_hold_and_hit_their_positions": {
+    "pass": true,
+    "at0": [
+      1,
+      0,
+      0
+    ],
+    "at05": [
+      0,
+      1,
+      0
+    ],
+    "at1": [
+      0,
+      0,
+      1
+    ]
+  },
+  "sanitize_repairs_stops": {
+    "pass": true,
+    "repaired": [
+      {
+        "id": "x",
+        "position": 0,
+        "color": "#000000"
+      },
+      {
+        "id": "x_",
+        "position": 0.5,
+        "color": "#123456"
+      },
+      {
+        "id": "s2",
+        "position": 0.9,
+        "color": "#ffffff"
+      }
+    ]
+  },
+  "palette_file_is_checked": {
+    "pass": true,
+    "messages": [
+      "This palette uses a newer format (schema 2); this build reads up to 1.",
+      "Stop colours must be sRGB hex (inputColorSpace is \"linear\")."
+    ]
+  },
+  "palette_files_match_the_looks": {
+    "pass": true,
+    "mineral-night.json": {
+      "body": "#0a1840 → #1438c8 → #22b8f0 → #e6f6ff",
+      "accent": "#7a2c08 → #ff9a2e → #ffe9b0"
+    },
+    "daylight-precision.json": {
+      "body": "#16305e → #1763c9 → #10b5c9 → #c6f5fb",
+      "accent": "#8a3a12 → #ff7a1a → #ffd27a"
+    }
+  },
+  "new_ramps_have_the_intended_value_structure": {
+    "pass": true,
+    "mineral.rampBody": {
+      "start": 0.0109,
+      "middle": 0.1957,
+      "end": 0.8995
+    },
+    "mineral.rampAccent": {
+      "start": 0.0596,
+      "middle": 0.45,
+      "end": 0.8267
+    },
+    "daylight.rampBody": {
+      "start": 0.0309,
+      "middle": 0.1837,
+      "end": 0.8428
+    },
+    "daylight.rampAccent": {
+      "start": 0.0847,
+      "middle": 0.3561,
+      "end": 0.6876
+    }
+  },
+  "older_looks_keep_ramps_and_light_off": {
+    "pass": true,
+    "av3_default_body": "#2a0d10 → #ff1430 → #ff2a3a → #ffffff"
+  },
+  "look_mix_mixes_ramps": {
+    "pass": true,
+    "rows": [
+      "rampBody",
+      "rampAccent"
+    ],
+    "size": 256
+  }
+}

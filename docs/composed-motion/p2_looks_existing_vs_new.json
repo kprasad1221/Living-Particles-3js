@@ -1,0 +1,60 @@
+{
+  "a": "this commit, default scene motion, tools/phrase_excerpt.py, Stand camera, seed 1, 1440 x 900",
+  "b": "this commit, default scene motion, tools/phrase_excerpt.py, Stand camera, seed 1, 1440 x 900",
+  "labels": [
+    "existing",
+    "new"
+  ],
+  "set": "looks",
+  "camera": "stand",
+  "pairs": {
+    "nocturne|mineral|rest": {
+      "meanAbsDiff8bit": 8.165,
+      "levelA": 15.89,
+      "levelB": 9.49,
+      "changedPixelsPct": 84.87
+    },
+    "nocturne|mineral|attack": {
+      "meanAbsDiff8bit": 23.989,
+      "levelA": 42.06,
+      "levelB": 19.75,
+      "changedPixelsPct": 99.57
+    },
+    "nocturne|mineral|crest": {
+      "meanAbsDiff8bit": 45.254,
+      "levelA": 69.42,
+      "levelB": 24.99,
+      "changedPixelsPct": 94.04
+    },
+    "nocturne|mineral|release": {
+      "meanAbsDiff8bit": 17.601,
+      "levelA": 29.93,
+      "levelB": 12.77,
+      "changedPixelsPct": 85.77
+    },
+    "av2p|daylight|rest": {
+      "meanAbsDiff8bit": 45.137,
+      "levelA": 108.75,
+      "levelB": 128.34,
+      "changedPixelsPct": 100.0
+    },
+    "av2p|daylight|attack": {
+      "meanAbsDiff8bit": 41.081,
+      "levelA": 114.04,
+      "levelB": 128.32,
+      "changedPixelsPct": 100.0
+    },
+    "av2p|daylight|crest": {
+      "meanAbsDiff8bit": 34.28,
+      "levelA": 116.73,
+      "levelB": 119.25,
+      "changedPixelsPct": 99.97
+    },
+    "av2p|daylight|release": {
+      "meanAbsDiff8bit": 40.421,
+      "levelA": 109.77,
+      "levelB": 121.19,
+      "changedPixelsPct": 99.99
+    }
+  }
+}

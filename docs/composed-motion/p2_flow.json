@@ -1,0 +1,262 @@
+{
+  "1440x900": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "layout": {
+      "scrollW": 1440,
+      "vw": 1440,
+      "offscreenControls": 0,
+      "editor": false,
+      "music": false,
+      "meters": false,
+      "barHeight": 63,
+      "barShareOfHeight": 0.07,
+      "transports": 1,
+      "playButtons": 1,
+      "mixSegs": 1,
+      "pass": true
+    },
+    "source": {
+      "opened": true,
+      "stress": "Stress test \u00b7 synthetic spectrum (visual only)",
+      "pattern": "Test pattern \u00b7 precise",
+      "closedAndFocusReturned": true,
+      "pass": true
+    },
+    "play": {
+      "afterClick": {
+        "running": false,
+        "label": "Play"
+      },
+      "spaceOnFocusedButton": true,
+      "spaceNoFocus": [
+        false,
+        true
+      ],
+      "pass": true
+    },
+    "scene": {
+      "ref": "builtin:plume",
+      "plume": true,
+      "lookA": "Nocturne \u00b7 plume",
+      "modified": false,
+      "revertDisabled": true,
+      "pass": true
+    },
+    "change": {
+      "before": 1,
+      "movement": 1.1,
+      "modified": true,
+      "revertDisabled": false,
+      "pass": true
+    },
+    "revert": {
+      "movement": 1,
+      "modified": false,
+      "ref": "builtin:plume",
+      "pass": true
+    },
+    "edit": {
+      "opened": true,
+      "oneFamilyVisible": [
+        "family-motion"
+      ],
+      "typedValue": 2.5,
+      "afterControlReset": 1.8,
+      "factoryDefault": 1.8,
+      "lightShowsWhichLook": "Look A \u00b7 Nocturne \u00b7 plume",
+      "metersWithLight": false,
+      "metersWithMusic": true,
+      "arrowKeyMovesFamily": "inspect",
+      "pass": true
+    },
+    "save": {
+      "whileTyping": {
+        "hidden": false,
+        "mode": "edit",
+        "music": false,
+        "running": true
+      },
+      "stored": true,
+      "ref": "user:flow test h l e r 1",
+      "modified": false,
+      "status": "Saved \u201cflow test h l e r 1\u201d \u2713",
+      "listed": true,
+      "selected": "user:flow test h l e r 1",
+      "pass": true
+    },
+    "escape": {
+      "first": {
+        "pop": false,
+        "editor": "edit"
+      },
+      "second": {
+        "pop": false,
+        "editor": "perform"
+      },
+      "pass": true
+    },
+    "round_trip": {
+      "ref": "user:flow test h l e r 1",
+      "modified": false,
+      "sameKey": true,
+      "lift": 2.2,
+      "plume": true,
+      "selected": "user:flow test h l e r 1",
+      "pictureMeanAbsDiff8bit": 0.0,
+      "pass": true
+    },
+    "camera": {
+      "start": [
+        0,
+        6.2,
+        24
+      ],
+      "afterWheelOverEditor": [
+        0,
+        6.2,
+        24
+      ],
+      "afterDragOnBarFader": [
+        0,
+        6.2,
+        24
+      ],
+      "faderMoved": true,
+      "afterWheelOverFloor": [
+        0,
+        7.111,
+        32.654
+      ],
+      "pass": true
+    },
+    "newer_scene": {
+      "ok": false,
+      "message": "This scene was saved by a newer version (schema 99); this build reads up to 8. Nothing was changed.",
+      "unchanged": true,
+      "pass": true
+    },
+    "errors": [],
+    "pass": true
+  },
+  "390x844": {
+    "viewport": [
+      390,
+      844
+    ],
+    "layout": {
+      "scrollW": 390,
+      "vw": 390,
+      "offscreenControls": 0,
+      "editor": false,
+      "music": false,
+      "meters": false,
+      "barHeight": 178,
+      "barShareOfHeight": 0.211,
+      "transports": 1,
+      "playButtons": 1,
+      "mixSegs": 1,
+      "pass": true
+    },
+    "source": {
+      "opened": true,
+      "stress": "Stress test \u00b7 synthetic spectrum (visual only)",
+      "pattern": "Test pattern \u00b7 precise",
+      "closedAndFocusReturned": true,
+      "pass": true
+    },
+    "play": {
+      "afterClick": {
+        "running": false,
+        "label": "Play"
+      },
+      "spaceOnFocusedButton": true,
+      "spaceNoFocus": [
+        false,
+        true
+      ],
+      "pass": true
+    },
+    "scene": {
+      "ref": "builtin:plume",
+      "plume": true,
+      "lookA": "Nocturne \u00b7 plume",
+      "modified": false,
+      "revertDisabled": true,
+      "pass": true
+    },
+    "change": {
+      "before": 1,
+      "movement": 1.1,
+      "modified": true,
+      "revertDisabled": false,
+      "pass": true
+    },
+    "revert": {
+      "movement": 1,
+      "modified": false,
+      "ref": "builtin:plume",
+      "pass": true
+    },
+    "edit": {
+      "opened": true,
+      "oneFamilyVisible": [
+        "family-motion"
+      ],
+      "typedValue": 2.5,
+      "afterControlReset": 1.8,
+      "factoryDefault": 1.8,
+      "lightShowsWhichLook": "Look A \u00b7 Nocturne \u00b7 plume",
+      "metersWithLight": false,
+      "metersWithMusic": true,
+      "arrowKeyMovesFamily": "inspect",
+      "pass": true
+    },
+    "save": {
+      "whileTyping": {
+        "hidden": false,
+        "mode": "edit",
+        "music": false,
+        "running": true
+      },
+      "stored": true,
+      "ref": "user:flow test h l e r 1",
+      "modified": false,
+      "status": "Saved \u201cflow test h l e r 1\u201d \u2713",
+      "listed": true,
+      "selected": "user:flow test h l e r 1",
+      "pass": true
+    },
+    "escape": {
+      "first": {
+        "pop": false,
+        "editor": "edit"
+      },
+      "second": {
+        "pop": false,
+        "editor": "perform"
+      },
+      "pass": true
+    },
+    "round_trip": {
+      "ref": "user:flow test h l e r 1",
+      "modified": false,
+      "sameKey": true,
+      "lift": 2.2,
+      "plume": true,
+      "selected": "user:flow test h l e r 1",
+      "pictureMeanAbsDiff8bit": 0.0,
+      "pass": true
+    },
+    "newer_scene": {
+      "ok": false,
+      "message": "This scene was saved by a newer version (schema 99); this build reads up to 8. Nothing was changed.",
+      "unchanged": true,
+      "pass": true
+    },
+    "errors": [],
+    "pass": true
+  }
+}

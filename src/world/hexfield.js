@@ -18,7 +18,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import { NB, HIST, SQ3, P, GLOBAL } from '../params.js';
-import { SHADER_LOOK_KEYS } from '../looks.js';
+import { SHADER_LOOK_KEYS, RAMP_ROWS } from '../looks.js';
+import { RampTexture } from './ramptex.js';
 
 // Small seeded PRNG so a layout is reproducible from its seed.
 export function mulberry32(a) {
@@ -91,6 +92,8 @@ const vertexShader = /* glsl */`
   uniform vec4 uAff;            // x, z, radius, on
   uniform float uAffLift, uAffGlow;
   uniform vec3 uPalette[${NB}];
+  uniform sampler2D uRamp;      // colour by role: row 0 body (activation → shadow, body, crest), row 1 accent (events)
+  uniform vec4 uRampP;          // ramp amount (0 voice colours … 1 ramps), curve, register spread, accent amount
 
   attribute vec4 aTile;         // x, z, distance from centre, voice
   attribute vec4 aSeed;         // threshold, live, height jitter, random
@@ -99,7 +102,7 @@ const vertexShader = /* glsl */`
   varying float vY;             // 0 at the floor, 1 at the top edge
   varying float vTop;           // 1 on the top cap
   varying float vAct, vOnset, vPulse, vAff, vHeight, vShim;
-  varying vec3 vColor, vWorld;
+  varying vec3 vColor, vWorld, vAccent;
 
   const float ROWS = ${HIST.toFixed(1)};
 
@@ -145,7 +148,17 @@ const vertexShader = /* glsl */`
     vLocal = position.xz; vY = position.y; vTop = step(0.5, normal.y);
     vAct = act; vOnset = onset; vPulse = pulse; vAff = aff; vHeight = height;
     int vi = int(voice + 0.5);
-    vColor = mix(uPalette[vi], uPalette[int(mod(float(vi) + 1.0, ${NB}.0))], drift);
+    vec3 voiceCol = mix(uPalette[vi], uPalette[int(mod(float(vi) + 1.0, ${NB}.0))], drift);
+    // Colour by role. A lit tile sits on the body ramp at its voice's level (how loud, not just lit or
+    // not). Register spread keeps low voices in the deep end and lets only the high voices reach the
+    // pale end (0 = every voice uses the whole ramp); colour drift nudges a tile further along.
+    float lvl = clamp(max(presence, aff * uAffGlow), 0.0, 1.0);
+    float rp = pow(lvl, uRampP.y) * mix(1.0, 0.4 + 0.6 * voice / ${(NB - 1).toFixed(1)}, uRampP.z);
+    vec3 bodyCol = texture2D(uRamp, vec2(clamp(rp + 0.25 * drift, 0.0, 1.0), ${(0.5 / RAMP_ROWS.length).toFixed(4)})).rgb;
+    vColor = mix(voiceCol, bodyCol, uRampP.x);
+    // Events take the accent family: a stronger hit sits further along it.
+    vec3 accentCol = texture2D(uRamp, vec2(clamp(0.25 + 0.75 * h.g, 0.0, 1.0), ${(1.5 / RAMP_ROWS.length).toFixed(4)})).rgb;
+    vAccent = accentCol;
     vWorld = wp;
     gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
   }
@@ -157,18 +170,24 @@ const vertexShader = /* glsl */`
 //   rim breath     rimBreath × the rim mapping's level (a whole-floor pulse)
 //   responsive     rimResponse on the rim, fill across the face, sideGlow down the sides, × tile activation
 //   inner spill    light leaking inward from the rim, × the rim's brightness
-//   hit accent     hitAccent: coloured boost on a hit · hitWhiten: separate move toward white
+//   hit accent     hitAccent: coloured boost on a hit (the accent ramp when the look colours by role)
+//                  · hitWhiten: separate move toward white
 //   pointer        tint near the pointer
+//   received light one local light on the surfaces (top faces and sides, by their normals). It is not
+//                  emission: it does not feed the glow, and a face only brightens while the light is near it.
 const fragmentShader = /* glsl */`
   uniform vec3 uRim, uFace, uSide, uFogColor, uAffColor;
   uniform float uRimWidth, uRestRim, uRimBreath, uRimResponse, uInnerSpill, uSpillFalloff, uFill, uFillCore;
   uniform float uSideGlow, uSideFalloff, uTopLine, uEdgeLines, uHitAccent, uHitWhiten, uGrain, uFog, uAffTint;
-  uniform float uDiag;          // 0 normal · 1 emission only · 2 surface only
+  uniform float uDiag;          // 0 normal · 1 emission only · 2 surface only · 3 received light only
   uniform float uEmit;          // Light macro: × everything the tile emits (bloom is fed from this, but its strength is separate)
+  uniform float uAccentMix;     // 0: hits keep the rim's colour (every look before v0.3) … 1: hits take the accent ramp
+  uniform vec4 uLight;          // receiving light: position xyz, reach
+  uniform vec3 uLightCol;       // its colour × strength (linear); zero = off
 
   varying vec2 vLocal;
   varying float vY, vTop, vAct, vOnset, vPulse, vAff, vHeight, vShim;
-  varying vec3 vColor, vWorld;
+  varying vec3 vColor, vWorld, vAccent;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float vnoise(vec2 p) {
@@ -190,13 +209,14 @@ const fragmentShader = /* glsl */`
     float inner = pow(clamp(hexd, 0.0, 1.0), uSpillFalloff);
 
     vec3 rimCol = mix(uRim, vColor, vAct);
-    float rimI = uRestRim + uRimBreath * vPulse + uRimResponse * vAct + uHitAccent * vOnset;
+    float rimI = uRestRim + uRimBreath * vPulse + uRimResponse * vAct;
+    vec3 rimLight = rimCol * rimI + mix(rimCol, vAccent, uAccentMix) * uHitAccent * vOnset;   // level, plus the hit in its own colour
 
     // Top cap
     float g = uGrain * (vnoise(vWorld.xz * 3.1) * 0.6 + vnoise(vWorld.xz * 11.0) * 0.4 - 0.5);
     vec3 face = uFace * (1.0 + 2.0 * g);
     vec3 fill = vColor * vAct * uFill * mix(inner, 0.55 + 0.45 * inner, uFillCore);
-    vec3 topEmit = fill + rimCol * rimI * (rim + inner * uInnerSpill)
+    vec3 topEmit = fill + rimLight * (rim + inner * uInnerSpill)
                  + vec3(uHitWhiten * vOnset * rim)
                  + mix(vColor, vec3(1.0), 0.35) * vShim * 2.0 * rim;              // harmony shimmer
 
@@ -211,19 +231,31 @@ const fragmentShader = /* glsl */`
     float corner = 1.0 - smoothstep(0.0, fwidth(ang) * 1.5 + 0.02, fa);
     vec3 sideBase = uSide * lit * (0.5 + 0.5 * vY);
     vec3 sideEmit = vColor * grad * vAct * uSideGlow
-      + rimCol * rimI * (topLine * uTopLine + corner * uEdgeLines * (0.25 + vAct) * 0.5);
+      + rimLight * (topLine * uTopLine + corner * uEdgeLines * (0.25 + vAct) * 0.5);
 
     vec3 base = mix(sideBase, face, vTop);
+    // Received light. Lambert on the real normals (up on the cap, outward on the sides), a smooth
+    // falloff that reaches zero at uLight.w, and a small floor term so near-black stone still takes a
+    // tint. The face and side colours are how the stone looks in ambient light, so they stand in for albedo.
+    vec3 toL = uLight.xyz - vWorld;
+    float dL = length(toL);
+    float fall = pow(clamp(1.0 - (dL * dL) / max(uLight.w * uLight.w, 1e-3), 0.0, 1.0), 2.0);
+    float lam = max(dot(mix(n, vec3(0.0, 1.0, 0.0), vTop), toL / max(dL, 1e-3)), 0.0);
+    vec3 recv = uLightCol * lam * fall * (mix(uSide, face, vTop) * 1.5 + 0.05);
+    base += recv;
     vec3 emit = mix(sideEmit, topEmit, vTop)
               + uAffColor * vAff * uAffTint * (0.25 + rim * vTop + topLine * (1.0 - vTop));
     emit *= uEmit;
-    if (uDiag > 1.5) emit = vec3(0.0);
+    if (uDiag > 2.5) { emit = vec3(0.0); base = recv; }
+    else if (uDiag > 1.5) emit = vec3(0.0);
     else if (uDiag > 0.5) base = vec3(0.0);
 
     float dist = length(vWorld.xz - cameraPosition.xz);           // ground distance: a high camera still sees a crisp floor
     float fog = 1.0 - exp(-pow(max(dist - 24.0, 0.0) * uFog, 1.5));   // clear near the viewer, haze toward the horizon
     // Emission-only (also the bloom source): emission fades with distance but never gains fog colour.
     if (uDiag > 0.5 && uDiag < 1.5) { gl_FragColor = vec4(emit * (1.0 - fog), 1.0); return; }
+    // Received-light-only: the same rule, so with the light off this view is black.
+    if (uDiag > 2.5) { gl_FragColor = vec4(recv * (1.0 - fog), 1.0); return; }
     gl_FragColor = vec4(mix(base + emit, uFogColor, fog), 1.0);
   }
 `;
@@ -250,9 +282,14 @@ export class HexField {
       uRim: { value: new THREE.Color() }, uFace: { value: new THREE.Color() }, uSide: { value: new THREE.Color() },
       uFogColor: { value: new THREE.Color() },
       uRowHz: { value: 60 }, uRowShift: { value: 0 }, uDiag: { value: 0 }, uEmit: { value: 1 },
+      uRamp: { value: null }, uRampP: { value: new THREE.Vector4(0, 1, 0.35, 0.8) }, uAccentMix: { value: 0 },
+      uLight: { value: new THREE.Vector4(0, 6, 0, 16) }, uLightCol: { value: new THREE.Color(0, 0, 0) },
       ...Object.fromEntries(SHADER_LOOK_KEYS.map(k => ['u' + k[0].toUpperCase() + k.slice(1), { value: 0 }])),
     };
+    this.ramp = new RampTexture(RAMP_ROWS.length);
+    this.uniforms.uRamp.value = this.ramp.texture;
     this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader, fragmentShader });
+    this.light = { x: 0, y: 6, z: 0, strength: 0 };     // where the receiving light is this frame (for readouts and checks)
     this.mesh = null;
     this.layout = null;
   }
@@ -294,15 +331,33 @@ export class HexField {
     u.uAffLift.value = A.lift; u.uAffGlow.value = A.glow; u.uAffTint.value = A.tint; u.uAffColor.value.set(A.color);
   }
 
-  sync(look, time, aff, timing = { rowHz: 60, rowShift: 0 }) {
+  // The receiving light this frame. Its place comes from P.light and the clock alone (so the same
+  // audio time puts it in the same place at any frame rate); only its strength listens to the music.
+  lightState(look, time, aff, level) {
+    const Lp = P.light, a0 = (Lp.angle * Math.PI) / 180;
+    let x, z;
+    if (Lp.path === 'pointer' && aff.on > 0.01) { x = aff.x; z = aff.z; }
+    else { const a = a0 + (Lp.path === 'orbit' ? (2 * Math.PI * time) / Math.max(Lp.period, 1e-3) : 0); x = Math.cos(a) * Lp.radius; z = Math.sin(a) * Lp.radius; }
+    const l = this.light; l.x = x; l.y = look.lightHeight; l.z = z;
+    l.strength = look.lightAmount * (1 - Lp.audio + Lp.audio * Math.min(1, Math.max(0, level)));
+    return l;
+  }
+
+  sync(look, time, aff, timing = { rowHz: 60, rowShift: 0 }, level = 1) {
     const u = this.uniforms;
     u.uTime.value = time; u.uRowHz.value = timing.rowHz; u.uRowShift.value = timing.rowShift;
     this.syncParams(aff);
     for (let k = 0; k < NB; k++) u.uPalette.value[k].copy(look['v' + k]);
     u.uRim.value.copy(look.rim); u.uFace.value.copy(look.face); u.uSide.value.copy(look.side);
     u.uFogColor.value.copy(look.horizon);
-    u.uDiag.value = { emission: 1, surface: 2 }[P.diag.view] || 0;
+    u.uDiag.value = { emission: 1, surface: 2, light: 3 }[P.diag.view] || 0;
     u.uEmit.value = P.macros.light;
+    this.ramp.update(look);
+    u.uRampP.value.set(look.ramp, look.rampCurve, look.rampSpread, look.accent);
+    u.uAccentMix.value = look.ramp * look.accent;
+    const l = this.lightState(look, time, aff, level);
+    u.uLight.value.set(l.x, l.y, l.z, look.lightReach);
+    u.uLightCol.value.copy(look.lightColor).multiplyScalar(l.strength);
     for (const k of SHADER_LOOK_KEYS) u['u' + k[0].toUpperCase() + k.slice(1)].value = look[k];
   }
 

@@ -16,6 +16,8 @@
 //    6  checkpoint 6: harmony group added (experimental, off for older saves)
 //    7  v0.3 · P1: Light macro added (macros.light, × emission; older saves get 1). Nothing renamed:
 //       the bar's "Activity" is the same value as before (macros.sparks), now also labelled for plumes.
+//    8  v0.3 · P2: looks carry colour ramps and a receiving light (older looks: ramps off, light off,
+//       default ramps drawn from their own voice colours); light group added (where the light is)
 //  Later checkpoints append steps here.
 //
 //  A scene saved by a newer build (schema above SCHEMA) is refused with a message instead of
@@ -24,7 +26,7 @@
 import { P, VERSION } from './params.js';
 import { isLegacy, fromLegacy } from './looks.js';
 
-export const SCHEMA = 7;
+export const SCHEMA = 8;
 
 // Groups of P written into a scene. Everything else in P is transient.
 export const SAVED_GROUPS = () => Object.keys(P).filter(k => !TRANSIENT.includes(k) && k !== 'looks');
@@ -64,6 +66,8 @@ const STEPS = {
   4: s => { s.schema = 5; return s; },
   5: s => { s.schema = 6; return s; },
   6: s => { s.schema = 7; return s; },
+  // 7 → 8: new look fields and a new group; sanitizeLook fills the look fields from the look's own colours.
+  7: s => { s.schema = 8; return s; },
 };
 
 // Can this build read the scene? Returns { ok, message }.
@@ -117,6 +121,8 @@ const RULES = [
          L.length = clamp(L.length, 0.2, 10); L.size = clamp(L.size, 0.01, 4); L.trail = clamp(Math.round(L.trail), 0, 6); L.voice = clamp(Math.round(L.voice), 0, 7); },
   P => { const H = P.harmony; H.tolerance = clamp(H.tolerance, 1, 100); H.activate = clamp(H.activate, 0.05, 1); H.letGo = clamp(Math.min(H.letGo, H.activate - 0.01), 0, 0.99);
          H.persist = clamp(H.persist, 0, 2000); H.bridge = clamp(H.bridge, 0, 2000); H.rise = clamp(H.rise, 0, 5000); H.release = clamp(H.release, 0, 10000); H.tuning = clamp(H.tuning, 400, 480); H.amount = clamp(H.amount, 0, 4); },
+  P => { const L = P.light; L.radius = clamp(L.radius, 0, 90); L.period = clamp(L.period, 1, 600); L.angle = clamp(L.angle, -360, 360); L.audio = clamp(L.audio, 0, 1);
+         L.source = clamp(Math.round(L.source), 0, 8); if (!['orbit', 'still', 'pointer'].includes(L.path)) L.path = 'orbit'; },
 ];
 export function validate() { for (const r of RULES) r(P); }
 

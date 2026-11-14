@@ -16,6 +16,7 @@
 import { P, VOICE_NAMES, HIST } from '../params.js';
 import { noteName, fifthScore } from '../analysis/harmony.js';
 import { LOOKS, LOOK_ORDER } from '../looks.js';
+import { rampCSS, sampleStops, rgbToHex, linearToSrgb, MAX_STOPS } from '../shared/palette.js';
 import { Kit } from './kit.js';
 
 const VOICES = VOICE_NAMES.map((n, i) => [n, i]);
@@ -91,10 +92,62 @@ export function buildPanel(container, app) {
   kit.text(lk, app.ui, 'saveName', { label: 'Save edited look as', tip: 'A name for the look you are editing (A or B, above).' });
   kit.button(lk, 'Save the edited look', () => { app.saveUserLook(); selA.rebuild(); selB.rebuild(); }, { tip: 'Stores the look you are editing in this browser; it appears in both preset lists with a ★.' });
 
-  const lookColours = [];
+  // A ramp editor: the gradient, then one row per stop (colour, place on the ramp, remove). A stop keeps
+  // its name and its order; it can move between its neighbours but never past them.
+  const rampEditors = [];
+  const rampEditor = (parent, look, key, title, tip) => {
+    const box = el('div', 'k-ramp'); parent.append(box);
+    const head = el('div', 'k-ramphead'), name = el('span', 'k-label', title), add = el('button', 'k-greset', '+ stop'), bar = el('div', 'k-rampbar'), rows = el('div', 'k-ramprows');
+    name.title = tip; add.type = 'button'; add.title = 'Add a stop in the widest gap'; bar.setAttribute('role', 'img'); bar.setAttribute('aria-label', `${title}: gradient`);
+    head.append(name, add); box.append(head, bar, rows);
+    const changed = commit => { bar.style.background = rampCSS(look[key]); if (commit) app.autosave(); };
+    const build = () => {
+      rows.textContent = '';
+      const stops = look[key];
+      stops.forEach((st, i) => {
+        const row = el('div', 'k-stop'), c = el('input', 'k-color'), id = el('span', 'k-stopid', st.id), pos = el('input', 'k-range'), val = el('span', 'k-value', pctOf(st.position)), rm = el('button', 'k-reset', '×');
+        c.type = 'color'; c.value = st.color; c.setAttribute('aria-label', `${title}, ${st.id}: colour`);
+        pos.type = 'range'; pos.min = 0; pos.max = 1; pos.step = 0.005; pos.value = st.position; pos.setAttribute('aria-label', `${title}, ${st.id}: position`);
+        rm.type = 'button'; rm.title = 'Remove this stop'; rm.setAttribute('aria-label', `${title}, ${st.id}: remove`); rm.disabled = stops.length <= 2;
+        c.addEventListener('input', () => { st.color = c.value; changed(false); });
+        c.addEventListener('change', () => changed(true));
+        pos.addEventListener('input', () => {
+          const lo = i > 0 ? stops[i - 1].position + 0.005 : 0, hi = i < stops.length - 1 ? stops[i + 1].position - 0.005 : 1;
+          st.position = Math.min(hi, Math.max(lo, +pos.value)); pos.value = st.position; val.textContent = pctOf(st.position); changed(false);
+        });
+        pos.addEventListener('change', () => changed(true));
+        rm.addEventListener('click', () => { stops.splice(i, 1); build(); changed(true); });
+        row.append(c, id, pos, val, rm); rows.append(row);
+      });
+      add.disabled = stops.length >= MAX_STOPS;
+      changed(false);
+    };
+    add.addEventListener('click', () => {
+      const stops = look[key]; let gi = 0, gw = -1;
+      for (let i = 0; i < stops.length - 1; i++) { const w = stops[i + 1].position - stops[i].position; if (w > gw) { gw = w; gi = i; } }
+      const at = (stops[gi].position + stops[gi + 1].position) / 2; let n = 1; while (stops.some(x => x.id === 'stop' + n)) n++;
+      stops.splice(gi + 1, 0, { id: 'stop' + n, position: at, color: rgbToHex(sampleStops(stops, at).map(linearToSrgb)) });
+      build(); changed(true);
+    });
+    build(); rampEditors.push(build);
+  };
+
+  const lookColours = [], rampCtrls = [];
   [app.lookA, app.lookB].forEach((look, ti) => {
     const slot = ti ? 'b' : 'a', pg = lookPage(fam.looks, slot), L = LOOKS.av2p;
-    const col = kit.folder(pg, 'Colours', { open: true, note: 'Each voice’s colour when it lights a tile, then the surfaces and the sky.' });
+    const rf = kit.folder(pg, 'Colour by role', { open: true, note: 'Voices: each voice has its own colour. Ramps: colour says what a tile is doing. The body ramp runs from a quiet tile to a loud one; the accent ramp is for events (hits, sparks, plume).' });
+    kit.slider(rf, look, 'ramp', { label: 'Colour from', min: 0, max: 1, step: 0.01, unit: '%', def: L.ramp, tip: '0 %: the voice colours below. 100 %: the ramps. In between they mix, so you can compare on one fader.' });
+    rampEditor(rf, look, 'rampBody', 'Body ramp', 'Left: a tile that has just lit. Right: its voice at full level.');
+    rampCtrls.push(kit.slider(rf, look, 'rampCurve', { label: 'Body response', min: 0.3, max: 4, step: 0.05, def: L.rampCurve, tip: 'Level → place on the body ramp. Above 1 keeps tiles in the dark end longer.' }));
+    rampCtrls.push(kit.slider(rf, look, 'rampSpread', { label: 'Register spread', min: 0, max: 1, step: 0.01, unit: '%', def: L.rampSpread, tip: '0 %: every voice can reach the pale end. 100 %: the lowest voice stops at 40 % of the ramp, the highest reaches the end, the rest in between.' }));
+    rampEditor(rf, look, 'rampAccent', 'Accent ramp', 'Left: a faint hit. Right: a strong one. Sparks and plume particles are spread along it.');
+    rampCtrls.push(kit.slider(rf, look, 'accent', { label: 'Accent on events', min: 0, max: 1, step: 0.01, unit: '%', def: L.accent, tip: 'How much hits and particles take the accent ramp instead of the tile’s own colour.' }));
+    const pst = el('p', 'k-status'); pst.hidden = true;
+    const say = r => { pst.hidden = false; pst.textContent = r.ok ? `Loaded “${r.name}” into look ${slot.toUpperCase()}` : r.message; };
+    kit.button(rf, 'Export these ramps as a palette file', () => app.exportPalette(), { tip: 'A small JSON palette: the two ramps, their roles and where the colours came from. Other sketches can load it.' });
+    kit.button(rf, 'Import a palette file', () => app.importPalette(say), { tip: 'Replaces this look’s ramps. Checked on import; a palette from a newer format is refused.' });
+    rf.append(pst);
+    const col = kit.folder(pg, 'Colours', { open: true, note: 'Each voice’s colour when it lights a tile (used when “Colour from” is below 100 %, and by the meters), then the surfaces and the sky.' });
     VOICE_NAMES.forEach((n, i) => kit.color(col, look, 'v' + i, { label: n, tip: `Colour of the ${n} voice`, def: L['v' + i] }));
     kit.color(col, look, 'rim', { label: 'rim at rest', tip: 'Rim colour before a voice lights the tile.', def: L.rim });
     kit.color(col, look, 'face', { label: 'face', tip: 'Top surface (not emission).', def: L.face });
@@ -214,7 +267,12 @@ export function buildPanel(container, app) {
     Sl(pr, 'edgeLines', 'Corner lines', 0, 2, { tip: 'Vertical lines at the prism corners.' });
     Sl(pr, 'hitWhiten', 'Hit whitening', 0, 3, { tip: 'Separate move toward white on hits. 0 keeps hits coloured.' });
     Sl(pr, 'sparkCore', 'Spark white core', 0, 2, { tip: 'White centre of each spark, separate from its coloured body.' });
-    const gl = kit.folder(pg, 'Glow', { open: true, note: 'Bloom: a halo added after rendering. It does not light neighbouring tiles.' });
+    const rl = kit.folder(pg, 'Received light', { open: true, note: 'One local light that the faces and sides receive. It is not emission: it does not feed the glow, and a surface brightens only while the light is near it. Where it travels is under Light path, below.' });
+    Sl(rl, 'lightAmount', 'Light amount', 0, 4, { tip: 'Strength of the received light. 0 turns it off (every look before v0.3).' });
+    kit.color(rl, look, 'lightColor', { label: 'Light colour', def: L.lightColor });
+    Sl(rl, 'lightReach', 'Reach', 2, 60, { step: 0.5, unit: 'u', tip: 'Distance at which the light has faded to nothing.' });
+    Sl(rl, 'lightHeight', 'Height', 0.5, 30, { step: 0.1, unit: 'u', tip: 'Low: grazing light, long shading across the columns. High: flatter, wider pool.' });
+    const gl = kit.folder(pg, 'Glow', { note: 'Bloom: a halo added after rendering. It does not light neighbouring tiles.' });
     Sl(gl, 'bloom', 'Glow amount', 0, 3, { tip: 'Bloom strength. Does not change the source brightness.' });
     Sl(gl, 'bloomRadius', 'Glow spread', 0, 1, { tip: 'UnrealBloomPass radius: how the blurred levels are weighted. Not a world distance.' });
     Sl(gl, 'bloomThreshold', 'Glow cutoff', 0, 3, { tip: 'Linear luminance a pixel needs before it glows. Saturated blue reads darker than yellow at equal RGB.' });
@@ -226,6 +284,16 @@ export function buildPanel(container, app) {
     Sl(at, 'exposure', 'Exposure', 0.2, 2.5, { tip: 'Before tone mapping.' });
     lightPages.push({ pg, look, slot, em, gl, at });
   });
+  const lp = kit.folder(fam.light, 'Light path', { onReset: () => app.resetGroup('light'), note: 'Where the received light is. Shared by both looks; only its strength listens to the music.' });
+  const Lt = P.light, DLt = D.light, lpCtrls = [];
+  lpCtrls.push(kit.select(lp, Lt, 'path', { label: 'Path', def: DLt.path, options: [['orbits the centre', 'orbit'], ['stays put', 'still'], ['follows the pointer', 'pointer']], tip: 'Follows the pointer: move over the floor and watch the faces take the light (the geometry does not change).' }));
+  lpCtrls.push(kit.slider(lp, Lt, 'radius', { label: 'Distance from centre', min: 0, max: 90, step: 0.5, unit: 'u', def: DLt.radius }));
+  const cPeriod = kit.slider(lp, Lt, 'period', { label: 'Orbit time', min: 2, max: 120, log: true, unit: 's', def: DLt.period, tip: 'One trip around the centre. It follows the clock, not the music.' });
+  lpCtrls.push(cPeriod);
+  lpCtrls.push(kit.slider(lp, Lt, 'angle', { label: 'Angle', min: -180, max: 180, step: 1, unit: '°', def: DLt.angle, tip: 'Where the orbit starts, or where the light stays.' }));
+  lpCtrls.push(kit.slider(lp, Lt, 'audio', { label: 'Follows the music', min: 0, max: 1, step: 0.01, unit: '%', def: DLt.audio, tip: 'How much of the light’s strength follows the source below. 0 %: steady. 100 %: dark in silence. Never brighter than the look’s light amount.' }));
+  lpCtrls.push(kit.select(lp, Lt, 'source', { label: 'Source', def: DLt.source, options: [...VOICES, ['global (whole spectrum)', 8]] }));
+  kit.readout(lp, 'Light now', () => { const l = app.field.light; return `x ${l.x.toFixed(1)} · z ${l.z.toFixed(1)} · strength ${l.strength.toFixed(2)}`; });
   const out = kit.folder(fam.light, 'Output', { note: 'Shared by both looks.' });
   kit.slider(out, P.macros, 'glow', { label: 'Glow ×', min: 0, max: 3, step: 0.01, unit: '×', def: 1, tip: 'Scales glow amount (bloom strength) of whichever look is showing. Nothing else.' });
   kit.select(out, P.render, 'toneMapping', { label: 'Tone mapping', options: [['Neutral', 'neutral'], ['ACES', 'aces'], ['AgX', 'agx'], ['none', 'none']], tip: 'Applied once, at output.' });
@@ -318,7 +386,7 @@ export function buildPanel(container, app) {
   kit.select(ins, P.solo, 'dest', { label: 'Solo response', def: 'none', tip: 'Shows only this destination’s visual contribution; the music keeps playing.',
     options: [['none', 'none'], ['Floor lift', 'lift'], ['Rim breath', 'rim'], ['Hits', 'hits'], ['Colour drift', 'colour'], ['Shimmer (harmony)', 'shimmer'], ['Sparks', 'sparks']] });
   kit.select(ins, P.diag, 'view', { label: 'Render view', tip: 'Take the picture apart.', def: 'normal',
-    options: [['composite', 'normal'], ['no glow', 'nobloom'], ['glow only', 'bloom'], ['emission only', 'emission'], ['surfaces only', 'surface']] });
+    options: [['composite', 'normal'], ['no glow', 'nobloom'], ['glow only', 'bloom'], ['emission only', 'emission'], ['surfaces only', 'surface'], ['received light only', 'light']] });
   const man = kit.folder(fam.inspect, 'Manual test', { note: 'Injected after the detector, to check a visual response without relying on the audio.' });
   kit.toggle(man, P.manual, 'on', { label: 'Hold a level', tip: 'Replaces one voice’s level after interpretation.' });
   kit.select(man, P.manual, 'voice', { label: 'Voice', options: VOICES });
@@ -343,6 +411,9 @@ export function buildPanel(container, app) {
     for (const c of ptr) c.setInactive(!Pt.on ? 'Pointer is off' : solo !== 'none' ? 'Solo response hides the pointer' : '');
     cOrbit.setInactive(Pt.mode !== 'orbit' ? 'Driven by the pointer' : '');
     for (const c of plCtrls) c.setInactive(!Pl.on ? 'Plume is off' : soloOther('sparks'));
+    const noLight = app.mixed.lightAmount > 0 ? '' : 'The look on screen has its light amount at 0';
+    for (const c of lpCtrls) c.setInactive(noLight);
+    if (!noLight) cPeriod.setInactive(Lt.path !== 'orbit' ? 'The light is not orbiting' : '');
     const noHarm = app.timeline.mode !== 'precise' ? 'Live · basic analysis has no harmonic path' : '';
     for (const c of hCtrls) c.setInactive(!Hm.on ? 'Shimmer is off' : noHarm || soloOther('shimmer'));
   };
@@ -364,7 +435,7 @@ export function buildPanel(container, app) {
 
   return {
     kit, setFamily,
-    refresh() { pick.a = P.looks.a; pick.b = P.looks.b; kit.refresh(); showMapping(); showEdited(); tickEditing(); },
+    refresh() { pick.a = P.looks.a; pick.b = P.looks.b; kit.refresh(); for (const build of rampEditors) build(); showMapping(); showEdited(); tickEditing(); },
     refreshMorph() {},
     tick() { kit.tick(); tickInactive(); tickEditing(); },
   };

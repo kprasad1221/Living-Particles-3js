@@ -28,6 +28,8 @@ const vertexShader = /* glsl */`
   uniform float uTime, uGravity, uTurb, uTurbScale, uSize, uPixel;
   uniform float uPlumeH, uPlumeCurl, uPlumeSpread, uPlumeDrift, uPlumeSize;
   uniform vec3 uPalette[${NB}];
+  uniform sampler2D uRamp;      // the look's ramps (row 1: accent)
+  uniform float uAccent;        // 0 voice colours … 1 the accent ramp (look.ramp × look.accent)
   attribute vec4 aStart;   // xyz, birth time
   attribute vec4 aVel;     // spark: velocity xyz, lifetime · plume: dir x, dir z, start angle, lifetime
   attribute vec4 aMeta;    // voice, seed, kind (0 spark · 1 plume), fade (trail ghosts < 1)
@@ -62,7 +64,8 @@ const vertexShader = /* glsl */`
     vec4 mv = viewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
     gl_PointSize = (aMeta.z < 0.5 ? uSize : uPlumeSize) * uPixel * (0.4 + 0.6 * life) / max(-mv.z, 0.1);
-    vColor = uPalette[int(aMeta.x + 0.5)];
+    // Particles are events: when the look colours by role they take the accent family, each at its own place on it.
+    vColor = mix(uPalette[int(aMeta.x + 0.5)], texture2D(uRamp, vec2(0.3 + 0.7 * aMeta.y, 0.75)).rgb, uAccent);
     vAlpha = life;
   }
 `;
@@ -96,6 +99,7 @@ export class Sparks {
       uPixel: { value: 500 }, uBright: { value: 1 }, uCore: { value: 0.6 },
       uPlumeH: { value: 8 }, uPlumeCurl: { value: 1 }, uPlumeSpread: { value: 3 }, uPlumeDrift: { value: 1 }, uPlumeSize: { value: 0.5 },
       uPalette: { value: Array.from({ length: NB }, () => new THREE.Color()) },
+      uRamp: { value: null }, uAccent: { value: 0 },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader, fragmentShader,
@@ -235,10 +239,11 @@ export class Sparks {
     u.uTime.value = time; u.uGravity.value = S.gravity; u.uTurb.value = S.turbulence; u.uTurbScale.value = S.turbScale;
     u.uSize.value = S.size; u.uPixel.value = pixel; u.uBright.value = S.bright; u.uCore.value = look.sparkCore;
     for (let k = 0; k < NB; k++) u.uPalette.value[k].copy(look['v' + k]);
+    u.uAccent.value = look.ramp * look.accent;
     const Pl = P.plume;
     u.uPlumeH.value = Pl.height; u.uPlumeCurl.value = Pl.curl; u.uPlumeSpread.value = Pl.spread; u.uPlumeDrift.value = Pl.drift; u.uPlumeSize.value = Pl.size;
     const solo = P.solo.dest;
-    this.points.visible = (S.on || P.plume.on) && P.diag.view !== 'surface' && (solo === 'none' || solo === 'sparks');
+    this.points.visible = (S.on || P.plume.on) && P.diag.view !== 'surface' && P.diag.view !== 'light' && (solo === 'none' || solo === 'sparks');
     this.flush();
   }
 

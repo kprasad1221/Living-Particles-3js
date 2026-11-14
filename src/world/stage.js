@@ -14,7 +14,7 @@
 //    5 combine      scene + glow                                      → finalRT
 //    6 output       tone map + sRGB                                    → screen
 //
-//  Diagnostic views (never saved): normal · nobloom · bloom (glow alone) · emission · surface.
+//  Diagnostic views (never saved): normal · nobloom · bloom (glow alone) · emission · surface · light (received light alone).
 // ─────────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -159,7 +159,7 @@ export class Stage {
 
     const s = this.sky.material.uniforms, view = P.diag.view;
     s.uTop.value.copy(look.skyTop); s.uHorizon.value.copy(look.horizon); s.uGlow.value = look.horizonGlow;
-    this.sky.visible = view !== 'emission';
+    this.sky.visible = view !== 'emission' && view !== 'light';
     this.look = look;
     this.bloom.strength = look.bloom * P.macros.glow; this.bloom.radius = look.bloomRadius; this.bloom.threshold = look.bloomThreshold;
     const tm = { aces: THREE.ACESFilmicToneMapping, agx: THREE.AgXToneMapping, neutral: THREE.NeutralToneMapping, none: THREE.NoToneMapping };

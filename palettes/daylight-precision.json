@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "id": "daylight-precision",
+  "version": 1,
+  "name": "Daylight Precision",
+  "source": {
+    "kind": "authored",
+    "note": "Working art direction; not sampled from a reference."
+  },
+  "inputColorSpace": "srgb",
+  "ramps": {
+    "body": {
+      "role": "emission",
+      "domain": "activation",
+      "curve": 1,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "shadow",
+          "position": 0,
+          "color": "#16305e"
+        },
+        {
+          "id": "deep",
+          "position": 0.4,
+          "color": "#1763c9"
+        },
+        {
+          "id": "body",
+          "position": 0.78,
+          "color": "#10b5c9"
+        },
+        {
+          "id": "crest",
+          "position": 1,
+          "color": "#c6f5fb"
+        }
+      ]
+    },
+    "accent": {
+      "role": "accent",
+      "domain": "event",
+      "curve": 1,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "ember",
+          "position": 0,
+          "color": "#8a3a12"
+        },
+        {
+          "id": "amber",
+          "position": 0.5,
+          "color": "#ff7a1a"
+        },
+        {
+          "id": "flare",
+          "position": 1,
+          "color": "#ffd27a"
+        }
+      ]
+    }
+  }
+}

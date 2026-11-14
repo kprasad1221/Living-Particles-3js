@@ -152,6 +152,17 @@ export const P = {
   },
 
   // PERFORMANCE MACROS — each scales exactly one thing, nothing else.
+  // The receiving light: where it is and what the music may do to it. Its colour, strength, reach
+  // and height belong to the look (Edit › Light), because they are part of how a world reads.
+  light: {
+    path: 'orbit',         // orbit: circles the centre · still: stays put · pointer: follows the pointer on the floor
+    radius: 16,            // distance from the centre, u
+    period: 18,            // one orbit, s (free of the music: it is where the light is, not how bright)
+    angle: 40,             // start angle (orbit) or fixed angle (still), degrees
+    audio: 0.8,            // how much of the light's strength follows the source: 0 steady · 1 dark in silence
+    source: 8,             // 0–7 a voice · 8 global
+  },
+
   macros: {
     movement: 1,           // × maximum lift                                        (bar: Movement)
     sparks: 1,             // × particles per hit, continuous emission, plume count  (bar: Activity)

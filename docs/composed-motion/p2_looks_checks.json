@@ -1,0 +1,103 @@
+{
+  "ramps_reach_the_screen": {
+    "voices_vs_ramps": 10.0888,
+    "stop_edit_at_100pct": 12.1733,
+    "stop_edit_at_0pct": 0.0,
+    "pass": true
+  },
+  "accent_is_for_events": {
+    "attack_frame": 2.9656,
+    "rest_frame": 0.0,
+    "pass": true
+  },
+  "light_is_received_not_emitted": {
+    "composite_on_vs_off": 5.9973,
+    "emission_on_vs_off": 0.0,
+    "light_only_when_off_max": 0.0,
+    "pass": true
+  },
+  "light_moves_over_fixed_form": {
+    "light_angles_deg": [
+      150,
+      90,
+      30
+    ],
+    "lit_patch_centre_x_px": [
+      320.4,
+      476.3,
+      627.1
+    ],
+    "emission_change_between_positions": [
+      0.0,
+      0.0
+    ],
+    "pass": true
+  },
+  "light_follows_music_within_bounds": {
+    "amount": 0.7,
+    "depth": 0.8,
+    "rest_attack_crest": [
+      {
+        "level": 0.362,
+        "strength": 0.3428
+      },
+      {
+        "level": 0.688,
+        "strength": 0.5252
+      },
+      {
+        "level": 0.864,
+        "strength": 0.624
+      }
+    ],
+    "expected": [
+      0.3427,
+      0.5253,
+      0.6238
+    ],
+    "pass": true
+  },
+  "light_position_ignores_frame_rate": {
+    "at_30_and_120_hz": [
+      [
+        -15.91235,
+        -1.67246
+      ],
+      [
+        -15.91235,
+        -1.67246
+      ]
+    ],
+    "pass": true
+  },
+  "scene_round_trip": {
+    "v03": {
+      "ok": true,
+      "schema": 8,
+      "same": true,
+      "body2": 0.61,
+      "light": 2.1,
+      "path": "still"
+    },
+    "v02_scene": {
+      "ok": true,
+      "ramp": 0,
+      "light": 0,
+      "deepStop": "#123456",
+      "macroLight": 1,
+      "lightPath": "orbit",
+      "schemaNow": 8
+    },
+    "pass": true
+  },
+  "palette_round_trip": {
+    "applied": true,
+    "changed": true,
+    "same": true,
+    "voiceColoursKept": true,
+    "newerRefused": true,
+    "message": "This palette uses a newer format (schema 9); this build reads up to 1.",
+    "pass": true
+  },
+  "errors": []
+}
