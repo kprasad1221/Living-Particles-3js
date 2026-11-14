@@ -6,7 +6,7 @@ Particle studies for the browser, translated from Unity VFX Graph and TouchDesig
 
 **v0.2 · Precision pass** (branch `study-01-precision-pass`) follows the [development spec](https://app.notion.com/p/4121f16ba96281ff9f04f57fd9f2b046): separately controlled light terms, an editor grouped by what you change, analysis of decoded tracks ahead of playback with timestamped hits, finite particle budgets, a composed Plume phrase, and an experimental harmony → shimmer response.
 
-**v0.3 · Composed motion** (branch `study-01-composed-motion`) follows the [v0.3 plan](https://app.notion.com/p/4161f16ba96281389159f718d93137af): a repaired history, one bar for performing and an editor that shows one family at a time, and (in progress) palette ramps, receiving light and an authored score. See *What v0.3 changes*.
+**v0.3 · Composed motion** (branch `study-01-composed-motion`) follows the [v0.3 plan](https://app.notion.com/p/4161f16ba96281389159f718d93137af): a repaired history, one bar for performing and an editor that shows one family at a time, colour ramps and a received light, and an authored score of calls and replies above the measured music. See *What v0.3 changes*.
 
 ![AV2 · Tropical, standing view](docs/study-01/01_av2_tropical_stand.jpg)
 
@@ -36,10 +36,13 @@ No build step. three.js 0.186.0 loads from jsDelivr through the import map in `i
   - *Three macros*, each scaling one thing: **Movement** (× maximum lift), **Activity** (× particle budgets), **Light** (× the light the tiles give off; glow is separate).
 - **Edit** (**E**) opens the editor, one family at a time: **Looks** (which world), **Motion** (how it travels), **Activity** (how much happens), **Light** (how the form reads), **Music response** (what the music can move), **Inspect** (why something happens). Looks and Light edit one look, A or B; the header says which and warns when that look is not on screen. Every number can be typed with its unit, nudged with the arrow keys, and reset (double-click a label). A greyed control says why it has no effect right now.
 - **Music response**: one mapping at a time. With this family or Inspect open, the meters under the floor show the mapping as *measured* (dB) → *processed* (after gate and normalisation) → *output* (what the floor gets). **Inspect** holds **Solo response**, **Manual test** (a level, a hit, or full harmony confidence injected after the detector) and the render views.
+- **Score** (Edit › Motion, off unless a scene turns it on; try the built-in scene *Call and reply*): authored gestures above the measured music. A slow **foundation** swell, a **call** that crosses the floor on one of three routes, and a **reply** that leaves from where the call arrived and climbs away. Tempo is set by hand, with **Tap** to put beat 1 where you hear it; nothing is inferred from loudness. The music can add weight to a gesture up to the amount you set, and no further. *Clock*: **Loop** puts every call exactly on the grid (the same after any seek; the score repeats, so a loop can be captured); **Free** lets the music bend the pace a little without ever jumping.
+- **Plume entry** (Edit › Motion › Plume): on every hit of a voice, only when cued (**C**), or once per call as its reply. The limit on plumes alive at once applies to all three.
+- **Light path** (Edit › Light) can ride the call: the received light sits on the call's front and goes dark between calls.
 - **Floor**: move the pointer over it (the hands in the Unity capture).
 - **Camera**: drag to orbit, scroll to zoom. **1** Stand · **2** Survey · **3** Low.
-- **Space** play/pause · **R** restart · **E** editor · **L** music · **H** hide everything · **Esc** closes whatever is open. Keys never fire while you type in a field.
-- **Scenes** hold every control, both looks and the camera. A scene saved with a track comes back when that track starts (*Recall*, in Music). Scenes from v0.1 and v0.2 load as before; a scene from a newer build is refused with a message.
+- **Space** play/pause · **R** restart · **C** cue a plume · **E** editor · **L** music · **H** hide everything · **Esc** closes whatever is open. Keys never fire while you type in a field.
+- **Scenes** hold every control, both looks and the camera, and load as a whole: anything an older scene never had takes its default, whatever was on screen before. A scene saved with a track comes back when that track starts (*Recall*, in Music). Scenes from v0.1 and v0.2 load as before; a scene from a newer build is refused with a message.
 
 ## What v0.3 changes
 
@@ -48,6 +51,7 @@ No build step. three.js 0.186.0 loads from jsDelivr through the import map in `i
 | P0 · Repaired baseline | The rim (b) and colour (a) history writes in `src/response.js` sat behind a line comment at `28e8c16`, so **rim breath** and **colour drift** never reached the floor while their meters moved. Restored. Also: a fall time of 0 ms is instant instead of NaN. | `node tools/history.test.mjs` (9 checks on what each history channel means); `capture.py check` item 8 (the two channels reach the picture); `docs/composed-motion/p0_before_vs_repaired.jpg` |
 | P1 · Interface | One bar instead of five panels: a single transport and a single A / Mix / B. The editor shows one family at a time. Meters appear only with the families that use them. Named scenes, Revert, and an "edited" state. The **Light** macro is new (× emission); **Activity** is the old Sparks macro, now named for everything it scales. | `python tools/flow.py` (the first-use path with real clicks and keys at 1440 and 390 px); `docs/composed-motion/p1_interface_*.jpg` |
 | P2 · Looks and light | **Colour by role**: a look can colour tiles from two ramps instead of eight voice colours. The *body* ramp places a lit tile by its voice's level (shadow → body → crest), with low voices kept in the deep end; the *accent* ramp colours events (hits, sparks, plume). One fader, *Colour from*, runs from voices to ramps. **Received light**: one local light that faces and sides receive by their normals; it is not emission, so it does not feed the glow. Two looks use both: **Mineral Night** (compare with Nocturne) and **Daylight Precision** (compare with AV2 · Precision); each has a built-in scene with the look it answers in B. Every earlier look renders exactly as before. Ramps export and import as palette files (`palettes/`). | `node tools/palette.test.mjs` (8); `python tools/looks_check.py` (8); `docs/composed-motion/p2_*.jpg` |
+| P3 · Composed response | An **authored score** above the measured music (`src/shared/score.js`): foundation, call, reply, each with its own rise, crest, release and rest, on a tempo set by hand. A reply is created with its call, carries its id and strength, and starts a set delay later: one call, one answer. The hex field draws them on three routes authored for the Stand camera (`src/world/gestures.js`): calls cross the middle ground, replies climb away; a tile takes the gesture's envelope at the nearest place on the route, so it lights as the front passes and settles on its own. Calls take the accent ramp, replies the pale end of the body ramp. **Plume entry** has three modes to compare (every hit · cued · once per call). The received light can ride the call. Loading a scene now starts from defaults, so an older scene cannot inherit a newer setting from whatever was loaded before. Schema 9; the score is off in every earlier scene, which render exactly as before. | `node tools/score.test.mjs` (13); `python tools/score_check.py` (9); `docs/composed-motion/p3_*` (stills, a timing chart of the three plume modes, and a 12 s clip, score off beside score on) |
 
 ## What v0.2 changed
 
@@ -69,8 +73,11 @@ No build step. three.js 0.186.0 loads from jsDelivr through the import map in `i
 | Module | What it is | First consumer here |
 |---|---|---|
 | `palette.js` | Colour ramps as a small versioned asset: stops with stable names, sRGB in, linear out, bake to a strip, mix two palettes, check a file. | `looks.js` (two ramps per look), `world/ramptex.js` (the texture) |
+| `score.js` | Authored gestures on a musical clock: calls and the replies that answer them (ids, parents, start times, envelopes), a foundation swell, a loop clock that is exact and a free clock that bends, bounded weighting by a measured level, reset and long-gap behaviour. | `world/gestures.js` (this floor's routes), `world/hexfield.js` (the shader), `main.js` (plume per reply, light on the call) |
 
-Palette files live in `palettes/`. A world decides what a ramp's position means: here a tile's level; in Audio Geology it could be a ribbon's age; in the Stellar Tide Court study, height along a branch.
+Palette files live in `palettes/`. A world decides what a ramp's position means: here a tile's level; in Audio Geology it could be a ribbon's age; in the Stellar Tide Court study, height along a branch. The score hands out gesture instances and knows nothing about geometry: a world supplies its own routes (here arcs and rays on the floor; in Audio Geology two ribbon groups; in the Court, the inlay paths and the branches). `tools/score.test.mjs` includes a check that draws the same score on two straight ribbons.
+
+Not extracted yet: the response envelopes and the history writer (`src/response.js`) still read this app's settings directly. Their channel layout and reset behaviour are pinned by `tools/history.test.mjs`; passing the settings in is the step that makes them portable.
 
 ## Audio analysis
 
@@ -113,6 +120,7 @@ It is a heuristic, not a probability, and not chord recognition. Dense mixes, mi
 | Update, stateless | Update blocks | CHOP → instancing | vertex shader reads history at the tile's ripple delay |
 | Update, stateful | stored attributes | Feedback TOP on a position texture | not yet; sparks and plumes are closed-form in age |
 | GPU events | GPU Event → spawn | Trigger → Particle SOP | hit event → finite budget, scheduled births |
+| Authored gesture | Timeline / animation curves driving exposed properties | Beat CHOP → Trigger CHOP envelopes, or an Animation COMP | `src/shared/score.js`: instances with a start time and an envelope on a hand-set tempo; the vertex shader finds each tile's place on the route |
 | Output | Output Mesh + Shader Graph | MAT + Render TOP | `ShaderMaterial` with separate light terms; point sprites |
 | Affector | Living Particles affector | distance in GLSL | pointer → floor plane → uniform |
 | Bloom, tone map | post-processing volume | Bloom TOP, Level TOP | emission-only render → UnrealBloomPass → OutputPass |
@@ -130,6 +138,8 @@ python capture.py check            # §8.2 integration checks → captures/check
 python flow.py                     # first-use path with real clicks and keys, 1440 and 390 px → captures/flow.json
 node palette.test.mjs              # ramps and palette files (colour handling, repair, value structure) → captures/palette.json
 python looks_check.py              # ramps, accent, received light, scene and palette round trips → captures/looks_check.json
+node score.test.mjs                # the score: one call one answer, same time same gestures, reset, long gaps, clocks, bounds → captures/score.json
+python score_check.py              # the composed response in the page, then its sheets, timing chart and clip → captures/score_check.json
 python capture.py matched baseline # matched stills of a named set of scenes (rest / attack / crest / release); also: looks
 python compare.py grid A B out.jpg # pair two folders of matched stills into one labelled sheet
 python capture.py phrase           # matched rest / attack / crest / release on a composed excerpt
@@ -141,7 +151,7 @@ python capture.py ui               # interface at 1440, 820 and 390 px
 
 v0.3 results are in `docs/composed-motion/` (per checkpoint); v0.2 results are in `docs/precision-pass/`. For v0.2, in short: 16 of 16 waveform fixtures and all integration checks pass; worst single-tone error 0.43 cents; isolated-hit timestamps within 1.65 ms median / 4.75 ms 95th percentile of the attack; the same audio time gives identical history, event ids and spark births at 30, 60 and 120 Hz display rates.
 
-Not measured here: frame rate on a real GPU (these runs are software-rendered), and the look on real music. `phrase_excerpt.py` is synthetic music with known moments; judging the refined looks on a Daydream track is still to do.
+Not measured here: frame rate on a real GPU (these runs are software-rendered), and how any of it reads on real music. `phrase_excerpt.py` is synthetic music with known moments (120 BPM, which is also the score's default tempo, so calls land on its kicks by construction). Choosing a Daydream passage, tapping the score to it and judging the looks and the composed response there is still to do.
 
 ## License
 

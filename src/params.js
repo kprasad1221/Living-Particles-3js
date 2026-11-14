@@ -35,6 +35,8 @@ export const VOICE_NAMES = ['sub', 'bass', 'low mid', 'mid', 'upper mid', 'prese
 export const t90coef = (ms, dt) => !(ms > 0) ? 1 : 1 - Math.exp(-Math.LN10 * dt / (ms / 1000));   // 0 (or not a number) = instant
 export const GLOBAL = 8;           // history column 8 holds the global (whole-spectrum) level
 
+import { SCORE_DEFAULTS } from './shared/score.js';
+
 export const P = {
   // FLOOR — what exists. Field size, layout and seed rebuild the tiles; the rest do not.
   floor: {
@@ -118,8 +120,28 @@ export const P = {
 
   // PLUME — one authored gesture per hit on a chosen voice: emerge, rise, curl, disperse, rest.
   // Starting timings (at length 1.6 s): 0–80 ms emerge · 80–250 ms rise · 250–900 ms curl · 900–1600 ms fade.
+  // The authored score (src/shared/score.js): a foundation, a call that travels, a reply that answers.
+  // Tempo is set by hand. Off by default: older scenes play exactly as before.
+  score: JSON.parse(JSON.stringify(SCORE_DEFAULTS)),
+  // How this world draws the score's gestures (src/world/gestures.js): sizes on the floor, in scene units.
+  gesture: {
+    reach: 1,              // scales every route about the centre (1 = as authored in world/gestures.js)
+    callWidth: 2.4,        // half-width of the band a call lights
+    callLift: 2.2,         // extra height under the call at full strength
+    callGlow: 1.0,         // how fully it lights the tiles it crosses (0…1)
+    replyLength: 16,       // how far a reply runs from where its call arrived (each route has its own heading)
+    replyWidth: 1.8,
+    replyLift: 3.0,
+    replyGlow: 0.9,
+    foundationLift: 1.6,   // height of the slow swell at its crest
+    foundationRadius: 18,  // the swell is a broad ring: its radius …
+    foundationWidth: 12,   // … and its half-width
+  },
+
   plume: {
     on: false,
+    entry: 'hits',         // what launches a plume — hits: every eligible hit on the voice below · cue: only when you cue it (C)
+                           // · reply: one per call, where the call arrives (needs the score)
     voice: 1,              // which voice's hits launch a plume (1 = bass)
     area: 14,              // launch from a tile of that voice within this radius of the centre (scene units);
                            // while the pointer is on the floor, from the tile nearest the pointer
@@ -156,6 +178,7 @@ export const P = {
   // and height belong to the look (Edit › Light), because they are part of how a world reads.
   light: {
     path: 'orbit',         // orbit: circles the centre · still: stays put · pointer: follows the pointer on the floor
+                           // · call: rides the front of the newest call and fades with it (needs the score)
     radius: 16,            // distance from the centre, u
     period: 18,            // one orbit, s (free of the music: it is where the light is, not how bright)
     angle: 40,             // start angle (orbit) or fixed angle (still), degrees

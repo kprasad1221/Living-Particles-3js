@@ -147,24 +147,29 @@ export class Sparks {
     }
   }
 
-  // A plume hit: one cluster, one direction, a bounded number alive at once.
-  plume(ev, field, aff, delayOf) {
+  // A plume: one cluster, one direction, a bounded number alive at once.
+  //   from a hit        ev is the hit; only the plume's voice launches one
+  //   cued or a reply   opts.any: no voice test · opts.at {x, z}: start at the tile nearest that point,
+  //                     at ev.time exactly (no ripple delay: the score already says when)
+  plume(ev, field, aff, delayOf, opts = {}) {
     const Pl = P.plume;
-    if (!Pl.on || ev.voice !== Pl.voice || !field.layout) return false;
-    const list = field.layout.byVoice[ev.voice]; if (!list.length) return false;
+    if (!Pl.on || (!opts.any && ev.voice !== Pl.voice) || !field.layout) return false;
+    const list = opts.at ? field.layout.all : field.layout.byVoice[ev.voice]; if (!list.length) return false;
     this.plumeEnds = this.plumeEnds.filter(t => t > ev.time);
     if (this.plumeEnds.length >= Pl.maxConcurrent) { this.stats.plumesDropped++; return true; }
     const L = field.layout, rand = mulberry32(hashStr('plume:' + ev.id.slice(ev.id.indexOf(':') + 1)) ^ (this.seed * 40503));
     // the selected cluster: nearest the pointer while it touches the floor, else a seeded tile near the centre
     let i = -1;
-    if (aff.on > 0.5 && P.pointer.on) {
+    if (opts.at) {
+      let bd = Infinity; for (const k of list) { const d = (L.x[k] - opts.at.x) ** 2 + (L.z[k] - opts.at.z) ** 2; if (d < bd) { bd = d; i = k; } }
+    } else if (aff.on > 0.5 && P.pointer.on) {
       let bd = Infinity; for (const k of list) { const d = (L.x[k] - aff.x) ** 2 + (L.z[k] - aff.z) ** 2; if (d < bd) { bd = d; i = k; } }
     } else {
       const near = Pl.area > 0 ? list.filter(k => L.d[k] <= Pl.area) : list;
       const pool = near.length ? near : list;
       i = pool[(rand() * pool.length) | 0];
     }
-    const delay = delayOf(i), birth = ev.time + delay;
+    const delay = opts.at ? 0 : delayOf(i), birth = ev.time + delay;
     const st = field.tileState(i, histAt, birth, aff, 60, -1e9);
     const a = rand() * Math.PI * 2, dirX = Math.cos(a), dirZ = Math.sin(a);
     const strength = 0.6 + 0.4 * Math.min(1, ev.strength);
@@ -180,7 +185,7 @@ export class Sparks {
 
   // One hit event → one finite budget. `delayOf(i)` gives the ripple delay (s) for tile i.
   burst(ev, field, aff, delayOf) {
-    this.plume(ev, field, aff, delayOf);
+    if (P.plume.entry === 'hits') this.plume(ev, field, aff, delayOf);
     const S = P.sparks;
     if (!S.on || !field.layout || !(EMITTERS[S.from] || EMITTERS.highs).includes(ev.voice)) return 0;
     const list = field.layout.byVoice[ev.voice];

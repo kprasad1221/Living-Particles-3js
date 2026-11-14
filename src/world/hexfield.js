@@ -20,6 +20,8 @@ import * as THREE from 'three';
 import { NB, HIST, SQ3, P, GLOBAL } from '../params.js';
 import { SHADER_LOOK_KEYS, RAMP_ROWS } from '../looks.js';
 import { RampTexture } from './ramptex.js';
+import { MAX_INSTANCES } from '../shared/score.js';
+import { packInstances, gestureLift } from './gestures.js';
 
 // Small seeded PRNG so a layout is reproducible from its seed.
 export function mulberry32(a) {
@@ -47,6 +49,7 @@ export function buildLayout(spawn) {
     voice: new Float32Array(count), gate: new Float32Array(count), live: new Float32Array(count),
     jitter: new Float32Array(count), rnd: new Float32Array(count),
     byVoice: Array.from({ length: NB }, () => []),
+    all: Array.from({ length: count }, (_, i) => i),
     radius: 0,
   };
   const w = Math.max(0.25, spawn.ringWidth) * SQ3;      // one voice band, in scene units
@@ -94,6 +97,12 @@ const vertexShader = /* glsl */`
   uniform vec3 uPalette[${NB}];
   uniform sampler2D uRamp;      // colour by role: row 0 body (activation → shadow, body, crest), row 1 accent (events)
   uniform vec4 uRampP;          // ramp amount (0 voice colours … 1 ramps), curve, register spread, accent amount
+  // The score's gestures (world/gestures.js packs these; kind 0 = empty slot):
+  uniform vec4 uGA[${MAX_INSTANCES}];   // ray: ax, az, bx, bz · arc: cx, cz, radius, –
+  uniform vec4 uGB[${MAX_INSTANCES}];   // arc: a0, sweep (rad) · then kind (1 ray, 2 arc), band width
+  uniform vec4 uGT[${MAX_INSTANCES}];   // start, travel, rise, crest
+  uniform vec4 uGC[${MAX_INSTANCES}];   // release, lift, glow, role (1 call: accent ramp · 0 reply: pale end of the body ramp)
+  uniform vec3 uFound;          // foundation swell: height now, ring radius, ring half-width
 
   attribute vec4 aTile;         // x, z, distance from centre, voice
   attribute vec4 aSeed;         // threshold, live, height jitter, random
@@ -105,6 +114,14 @@ const vertexShader = /* glsl */`
   varying vec3 vColor, vWorld, vAccent;
 
   const float ROWS = ${HIST.toFixed(1)};
+
+  // One gesture's local envelope: 0 before the front arrives, rise, crest, release (shared/score.js envelope()).
+  float genv(float tau, float rise, float crest, float rel) {
+    if (tau <= 0.0) return 0.0;
+    if (tau < rise) return smoothstep(0.0, 1.0, tau / max(rise, 1e-6));
+    if (tau < rise + crest) return 1.0;
+    return 1.0 - smoothstep(0.0, 1.0, (tau - rise - crest) / max(rel, 1e-6));
+  }
 
   vec4 hist(float voice, float row) {
     row = clamp(row, 0.0, ROWS - 1.0);
@@ -139,8 +156,37 @@ const vertexShader = /* glsl */`
     // Pointer: distance to a point you move (the hand in the Unity capture).
     float aff = uAff.w * pow(1.0 - smoothstep(0.0, uAff.z, length(aTile.xy - uAff.xy)), 2.0);
 
-    float height = max(uBase + aSeed.z * uJitter + uExtrude * pow(act, uShape) + swell + aff * uAffLift, ${MIN_HEIGHT});
-    act = max(act, aff * uAffGlow);
+    // SCORE · calls and replies: each tile takes the envelope of the nearest place on the gesture's route,
+    // within a soft band. A tile the front has passed fades on its own while the front moves on.
+    float gLift = 0.0, gGlow = 0.0, gRole = 0.0;
+    for (int i = 0; i < ${MAX_INSTANCES}; i++) {
+      float kind = uGB[i].z;
+      if (kind < 0.5) continue;
+      float u; vec2 q;
+      if (kind < 1.5) {
+        vec2 ab = uGA[i].zw - uGA[i].xy;
+        u = clamp(dot(aTile.xy - uGA[i].xy, ab) / max(dot(ab, ab), 1e-4), 0.0, 1.0);
+        q = uGA[i].xy + ab * u;
+      } else {
+        vec2 v = aTile.xy - uGA[i].xy;
+        float span = abs(uGB[i].y), dir = uGB[i].y < 0.0 ? -1.0 : 1.0;
+        float da = mod((atan(v.y, v.x) - uGB[i].x) * dir, 6.2831853);        // 0…2π along the sweep
+        u = da <= span ? da / max(span, 1e-4) : (da - span < 6.2831853 - da ? 1.0 : 0.0);
+        float a = uGB[i].x + uGB[i].y * u;
+        q = uGA[i].xy + uGA[i].z * vec2(cos(a), sin(a));
+      }
+      vec2 off = aTile.xy - q;
+      float g = exp(-dot(off, off) / max(uGB[i].w * uGB[i].w, 1e-4)) * genv(uTime - (uGT[i].x + u * uGT[i].y), uGT[i].z, uGT[i].w, uGC[i].x);
+      gLift += g * uGC[i].y;
+      if (g * uGC[i].z > gGlow) { gGlow = g * uGC[i].z; gRole = uGC[i].w; }
+    }
+    // SCORE · foundation: one slow swell, a broad ring, uneven the way the sub fold is.
+    float ring = (aTile.z - uFound.y) / max(uFound.z, 1e-3);
+    float found = uFound.x * exp(-ring * ring) * (0.6 + 0.4 * fold);
+
+    float height = max(uBase + aSeed.z * uJitter + uExtrude * pow(act, uShape) + swell + found + gLift + aff * uAffLift, ${MIN_HEIGHT});
+    float actVoice = act;
+    act = max(max(act, aff * uAffGlow), gGlow);
 
     float s = 1.0 - uGap;
     vec3 wp = vec3(aTile.x + position.x * s, position.y * height, aTile.y + position.z * s);
@@ -156,6 +202,11 @@ const vertexShader = /* glsl */`
     float rp = pow(lvl, uRampP.y) * mix(1.0, 0.4 + 0.6 * voice / ${(NB - 1).toFixed(1)}, uRampP.z);
     vec3 bodyCol = texture2D(uRamp, vec2(clamp(rp + 0.25 * drift, 0.0, 1.0), ${(0.5 / RAMP_ROWS.length).toFixed(4)})).rgb;
     vColor = mix(voiceCol, bodyCol, uRampP.x);
+    // A gesture brings its own colour from the look's ramps: a call the accent family, a reply the pale end
+    // of the body ramp. Where a voice already lights the tile the two share it.
+    vec3 gCol = mix(texture2D(uRamp, vec2(0.96, ${(0.5 / RAMP_ROWS.length).toFixed(4)})).rgb,
+                    texture2D(uRamp, vec2(0.45 + 0.5 * gGlow, ${(1.5 / RAMP_ROWS.length).toFixed(4)})).rgb, gRole);
+    vColor = mix(vColor, gCol, gGlow / max(gGlow + actVoice, 1e-3));
     // Events take the accent family: a stronger hit sits further along it.
     vec3 accentCol = texture2D(uRamp, vec2(clamp(0.25 + 0.75 * h.g, 0.0, 1.0), ${(1.5 / RAMP_ROWS.length).toFixed(4)})).rgb;
     vAccent = accentCol;
@@ -284,12 +335,16 @@ export class HexField {
       uRowHz: { value: 60 }, uRowShift: { value: 0 }, uDiag: { value: 0 }, uEmit: { value: 1 },
       uRamp: { value: null }, uRampP: { value: new THREE.Vector4(0, 1, 0.35, 0.8) }, uAccentMix: { value: 0 },
       uLight: { value: new THREE.Vector4(0, 6, 0, 16) }, uLightCol: { value: new THREE.Color(0, 0, 0) },
+      uGA: { value: Array.from({ length: MAX_INSTANCES }, () => new THREE.Vector4()) }, uGB: { value: Array.from({ length: MAX_INSTANCES }, () => new THREE.Vector4(0, 0, 0, 1)) },
+      uGT: { value: Array.from({ length: MAX_INSTANCES }, () => new THREE.Vector4()) }, uGC: { value: Array.from({ length: MAX_INSTANCES }, () => new THREE.Vector4()) },
+      uFound: { value: new THREE.Vector3(0, 18, 12) },
       ...Object.fromEntries(SHADER_LOOK_KEYS.map(k => ['u' + k[0].toUpperCase() + k.slice(1), { value: 0 }])),
     };
     this.ramp = new RampTexture(RAMP_ROWS.length);
     this.uniforms.uRamp.value = this.ramp.texture;
     this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader, fragmentShader });
     this.light = { x: 0, y: 6, z: 0, strength: 0 };     // where the receiving light is this frame (for readouts and checks)
+    this.gestures = { instances: [], foundation: 0 };  // the score's state this step (setScore), also used by tileState
     this.mesh = null;
     this.layout = null;
   }
@@ -331,11 +386,26 @@ export class HexField {
     u.uAffLift.value = A.lift; u.uAffGlow.value = A.glow; u.uAffTint.value = A.tint; u.uAffColor.value.set(A.color);
   }
 
+  // The score's gestures for this step: live instances and the foundation's height now (already weighted).
+  // Called whenever the music advances, like syncParams, so the CPU and the shader agree.
+  setScore(instances, foundation) {
+    const u = this.uniforms, G = P.gesture, solo = P.solo.dest, on = solo === 'none' || solo === 'score';
+    this.gestures.instances = on ? instances : []; this.gestures.foundation = on ? foundation * G.foundationLift : 0;
+    packInstances(this.gestures.instances, G, u.uGA.value, u.uGB.value, u.uGT.value, u.uGC.value);
+    u.uFound.value.set(this.gestures.foundation, G.foundationRadius, G.foundationWidth);
+  }
+
   // The receiving light this frame. Its place comes from P.light and the clock alone (so the same
   // audio time puts it in the same place at any frame rate); only its strength listens to the music.
-  lightState(look, time, aff, level) {
+  // `head` is the front of the newest call (gestures.callHead), for the path that rides it.
+  lightState(look, time, aff, level, head = null) {
     const Lp = P.light, a0 = (Lp.angle * Math.PI) / 180;
     let x, z;
+    if (Lp.path === 'call') {
+      const l = this.light; l.y = look.lightHeight;
+      if (head) { l.x = head.x; l.z = head.z; l.strength = look.lightAmount * Math.min(1, head.strength); } else l.strength = 0;   // dark between calls
+      return l;
+    }
     if (Lp.path === 'pointer' && aff.on > 0.01) { x = aff.x; z = aff.z; }
     else { const a = a0 + (Lp.path === 'orbit' ? (2 * Math.PI * time) / Math.max(Lp.period, 1e-3) : 0); x = Math.cos(a) * Lp.radius; z = Math.sin(a) * Lp.radius; }
     const l = this.light; l.x = x; l.y = look.lightHeight; l.z = z;
@@ -343,7 +413,7 @@ export class HexField {
     return l;
   }
 
-  sync(look, time, aff, timing = { rowHz: 60, rowShift: 0 }, level = 1) {
+  sync(look, time, aff, timing = { rowHz: 60, rowShift: 0 }, level = 1, head = null) {
     const u = this.uniforms;
     u.uTime.value = time; u.uRowHz.value = timing.rowHz; u.uRowShift.value = timing.rowShift;
     this.syncParams(aff);
@@ -355,7 +425,7 @@ export class HexField {
     this.ramp.update(look);
     u.uRampP.value.set(look.ramp, look.rampCurve, look.rampSpread, look.accent);
     u.uAccentMix.value = look.ramp * look.accent;
-    const l = this.lightState(look, time, aff, level);
+    const l = this.lightState(look, time, aff, level, head);
     u.uLight.value.set(l.x, l.y, l.z, look.lightReach);
     u.uLightCol.value.copy(look.lightColor).multiplyScalar(l.strength);
     for (const k of SHADER_LOOK_KEYS) u['u' + k[0].toUpperCase() + k.slice(1)].value = look[k];
@@ -376,8 +446,11 @@ export class HexField {
     const swell = u.uSwell.value * sm(lo, hi, histAt(0, row, 0)) * amt.x * fold(L.x[i], L.z[i], time);
     const av = u.uAff.value, dA = Math.hypot(L.x[i] - av.x, L.z[i] - av.y);
     const affV = av.w * Math.pow(1 - sm(0, av.z, dA), 2);
+    const Gs = this.gestures, ring = (L.d[i] - u.uFound.value.y) / Math.max(u.uFound.value.z, 1e-3);
+    const found = Gs.foundation * Math.exp(-ring * ring) * (0.6 + 0.4 * fold(L.x[i], L.z[i], time));
+    const gLift = Gs.instances.length ? gestureLift(Gs.instances, P.gesture, L.x[i], L.z[i], time) : 0;
     const height = Math.max(u.uBase.value + L.jitter[i] * u.uJitter.value + u.uExtrude.value * Math.pow(act, u.uShape.value)
-      + swell + affV * u.uAffLift.value, MIN_HEIGHT);
+      + swell + found + gLift + affV * u.uAffLift.value, MIN_HEIGHT);
     return { act, onset, height };
   }
 }

@@ -158,6 +158,57 @@ export function buildPanel(container, app) {
   });
 
   // ══ MOTION ═════════════════════════════════════════════════════════════════
+  // Score: the authored layer. Its tempo is set by hand; the music only weighs on it, within limits.
+  const sc = kit.folder(fam.motion, 'Score', { open: true, onReset: () => { app.resetGroup('score'); app.resetGroup('gesture'); },
+    note: 'Authored gestures over the measured music: a slow foundation, a call that crosses the floor, a reply that answers from where the call arrived. Each returns to rest. The music can add weight, never more than the amounts here.' });
+  const Sc = P.score, DSc = D.score, Gs = P.gesture, DGs = D.gesture, scCtrls = [];
+  kit.toggle(sc, Sc, 'on', { label: 'On', tip: 'Off: the floor answers only the measured music (every scene before v0.3).' });
+  scCtrls.push(kit.slider(sc, Sc, 'bpm', { label: 'Tempo', min: 40, max: 200, step: 0.1, unit: 'bpm', def: DSc.bpm, tip: 'Set by hand. Nothing here is measured from the music.' }));
+  kit.button(sc, 'Tap: a call starts now', () => app.tapOrigin(), { tip: 'Moves beat 1 to this moment. The other calls follow from it.' });
+  scCtrls.push(kit.segmented(sc, Sc, 'mode', { label: 'Clock', options: [['Loop', 'loop'], ['Free', 'free']],
+    tip: 'Loop: every call is exactly on the grid, the same after any seek, and the whole score repeats (for capturing a loop). Free: the music may bend the pace a little; it never jumps.' }));
+  const cRate = kit.slider(sc, Sc, 'rateDepth', { label: 'Pace follows music', min: 0, max: 0.5, step: 0.01, unit: '%', def: DSc.rateDepth, tip: 'Free clock only: the pace may move within ± this share of the tempo.' });
+  scCtrls.push(kit.select(sc, Sc, 'source', { label: 'Weight from', def: DSc.source, options: [...VOICES, ['global (whole spectrum)', 8]], tip: 'The measured level that may add weight to calls (and so to their replies).' }));
+  kit.readout(sc, 'Timing', () => { const i = app.scoreInfo(); return `call every ${i.call.toFixed(2)} s · swell every ${i.foundation.toFixed(1)} s · repeats every ${i.repeats.toFixed(1)} s`; },
+    { tip: 'Repeats: capture this long (Loop clock) for a seamless loop of the score.' });
+  kit.readout(sc, 'Now', () => { const t = app.timeline.latest, s = app.score; return Sc.on ? `${s.alive(t, 'call').length} call · ${s.alive(t, 'reply').length} reply alive · next call in ${app.scoreInfo().nextCallIn.toFixed(1)} s` : 'off'; });
+  const scCall = kit.sub(sc, 'Call');
+  scCtrls.push(kit.slider(scCall, Sc, 'callBeats', { label: 'Every', min: 1, max: 32, step: 1, unit: 'beats', def: DSc.callBeats, tip: 'Beats from one call to the next. The rest of the time is rest.' }));
+  scCtrls.push(kit.slider(scCall, Sc, 'routes', { label: 'Routes used', min: 1, max: 3, step: 1, def: DSc.routes, tip: 'Calls step through this many routes in order: across the front, around the far side, a small arc near the centre.' }));
+  scCtrls.push(kit.slider(scCall, Sc.call, 'travel', { label: 'Travel time', min: 0.1, max: 4, step: 0.01, unit: 's', def: DSc.call.travel, tip: 'How long the front takes to cross its route.' }));
+  scCtrls.push(kit.slider(scCall, Sc.call, 'rise', { label: 'Rise', min: 0.01, max: 2, step: 0.01, unit: 's', def: DSc.call.rise }));
+  scCtrls.push(kit.slider(scCall, Sc.call, 'crest', { label: 'Crest', min: 0, max: 2, step: 0.01, unit: 's', def: DSc.call.crest }));
+  scCtrls.push(kit.slider(scCall, Sc.call, 'release', { label: 'Release', min: 0.05, max: 4, step: 0.01, unit: 's', def: DSc.call.release, tip: 'How long a tile takes to settle after the front has passed.' }));
+  scCtrls.push(kit.slider(scCall, Sc.call, 'strength', { label: 'Strength', min: 0, max: 2, step: 0.01, unit: '×', def: DSc.call.strength }));
+  scCtrls.push(kit.slider(scCall, Sc.call, 'audio', { label: 'Follows music', min: 0, max: 1, step: 0.01, unit: '%', def: DSc.call.audio, tip: 'Share of the strength that follows the level at the moment the call starts. 0 %: every call the same. Never above the strength.' }));
+  scCtrls.push(kit.slider(scCall, Gs, 'callWidth', { label: 'Width', min: 0.5, max: 12, step: 0.1, unit: 'u', def: DGs.callWidth }));
+  scCtrls.push(kit.slider(scCall, Gs, 'callLift', { label: 'Lift', min: 0, max: 8, step: 0.05, unit: 'u', def: DGs.callLift }));
+  scCtrls.push(kit.slider(scCall, Gs, 'callGlow', { label: 'Light it gives', min: 0, max: 1, step: 0.01, unit: '%', def: DGs.callGlow, tip: 'How fully the call lights the tiles it crosses, in the accent ramp.' }));
+  scCtrls.push(kit.slider(scCall, Gs, 'reach', { label: 'Route size', min: 0.3, max: 3, step: 0.01, unit: '×', def: DGs.reach, tip: 'Scales every route about the centre.' }));
+  const scReply = kit.sub(sc, 'Reply');
+  kit.toggle(scReply, Sc.reply, 'on', { label: 'On', tip: 'One reply per call, never more.' });
+  const rpCtrls = [];
+  rpCtrls.push(kit.slider(scReply, Sc.reply, 'delay', { label: 'Answer delay', min: 0, max: 4, step: 0.01, unit: 's', def: DSc.reply.delay, tip: 'After its call starts. With the default call (0.7 s travel) 0.5 s answers just before the call arrives.' }));
+  rpCtrls.push(kit.slider(scReply, Sc.reply, 'travel', { label: 'Travel time', min: 0.1, max: 4, step: 0.01, unit: 's', def: DSc.reply.travel }));
+  rpCtrls.push(kit.slider(scReply, Sc.reply, 'rise', { label: 'Rise', min: 0.01, max: 2, step: 0.01, unit: 's', def: DSc.reply.rise }));
+  rpCtrls.push(kit.slider(scReply, Sc.reply, 'crest', { label: 'Crest', min: 0, max: 2, step: 0.01, unit: 's', def: DSc.reply.crest }));
+  rpCtrls.push(kit.slider(scReply, Sc.reply, 'release', { label: 'Release', min: 0.05, max: 4, step: 0.01, unit: 's', def: DSc.reply.release }));
+  rpCtrls.push(kit.slider(scReply, Sc.reply, 'gain', { label: 'Strength vs its call', min: 0, max: 2, step: 0.01, unit: '×', def: DSc.reply.gain, tip: 'A reply inherits its call’s strength, times this.' }));
+  rpCtrls.push(kit.slider(scReply, Gs, 'replyLength', { label: 'Length', min: 2, max: 60, step: 0.5, unit: 'u', def: DGs.replyLength, tip: 'How far it runs from where its call arrived, climbing away from the Stand camera.' }));
+  rpCtrls.push(kit.slider(scReply, Gs, 'replyWidth', { label: 'Width', min: 0.5, max: 12, step: 0.1, unit: 'u', def: DGs.replyWidth }));
+  rpCtrls.push(kit.slider(scReply, Gs, 'replyLift', { label: 'Lift', min: 0, max: 8, step: 0.05, unit: 'u', def: DGs.replyLift }));
+  rpCtrls.push(kit.slider(scReply, Gs, 'replyGlow', { label: 'Light it gives', min: 0, max: 1, step: 0.01, unit: '%', def: DGs.replyGlow, tip: 'In the pale end of the body ramp.' }));
+  const scFound = kit.sub(sc, 'Foundation');
+  scCtrls.push(kit.slider(scFound, Sc, 'foundationBeats', { label: 'Every', min: 4, max: 128, step: 1, unit: 'beats', def: DSc.foundationBeats, tip: 'One slow swell per this many beats (rounded to whole calls).' }));
+  scCtrls.push(kit.slider(scFound, Sc.foundation, 'rise', { label: 'Rise', min: 0.1, max: 20, step: 0.05, unit: 's', def: DSc.foundation.rise }));
+  scCtrls.push(kit.slider(scFound, Sc.foundation, 'crest', { label: 'Crest', min: 0, max: 20, step: 0.05, unit: 's', def: DSc.foundation.crest }));
+  scCtrls.push(kit.slider(scFound, Sc.foundation, 'release', { label: 'Release', min: 0.1, max: 20, step: 0.05, unit: 's', def: DSc.foundation.release, tip: 'Whatever is left of the cycle after rise, crest and release is rest.' }));
+  scCtrls.push(kit.slider(scFound, Sc.foundation, 'amount', { label: 'Amount', min: 0, max: 2, step: 0.01, unit: '×', def: DSc.foundation.amount }));
+  scCtrls.push(kit.slider(scFound, Sc.foundation, 'audio', { label: 'Follows bass', min: 0, max: 1, step: 0.01, unit: '%', def: DSc.foundation.audio, tip: 'Share of the swell’s height that follows the sub and bass level. Never above the amount.' }));
+  scCtrls.push(kit.slider(scFound, Gs, 'foundationLift', { label: 'Lift', min: 0, max: 8, step: 0.05, unit: 'u', def: DGs.foundationLift }));
+  scCtrls.push(kit.slider(scFound, Gs, 'foundationRadius', { label: 'Ring radius', min: 0, max: 60, step: 0.5, unit: 'u', def: DGs.foundationRadius }));
+  scCtrls.push(kit.slider(scFound, Gs, 'foundationWidth', { label: 'Ring width', min: 2, max: 60, step: 0.5, unit: 'u', def: DGs.foundationWidth }));
+
   const mv = kit.folder(fam.motion, 'Floor movement', { open: true, onReset: () => app.resetGroup('movement') });
   const M = P.movement, DM = D.movement, ML = P.map.lift;
   const cLift = kit.slider(mv, M, 'lift', { label: 'Maximum lift', min: 0, max: 12, step: 0.05, unit: 'u', def: DM.lift, tip: 'Extra height at full activation (× Movement in the bar).' });
@@ -181,7 +232,12 @@ export function buildPanel(container, app) {
   const Pl = P.plume, DPl = D.plume;
   kit.toggle(pl, Pl, 'on', { label: 'On' });
   const plCtrls = [];
-  plCtrls.push(kit.select(pl, Pl, 'voice', { label: 'Launched by', options: VOICES, def: DPl.voice }));
+  plCtrls.push(kit.select(pl, Pl, 'entry', { label: 'Launched', def: DPl.entry, tip: 'Compare the three: every hit, only when you cue it, or exactly one per call of the score.',
+    options: [['on every hit of a voice', 'hits'], ['only when cued (C)', 'cue'], ['once per call, as its reply', 'reply']] }));
+  kit.button(pl, 'Cue a plume now', () => app.cuePlume(), { tip: 'One plume, now (key C). Works in every entry mode; the limit on plumes alive at once still applies.' });
+  const plWhy = kit.status(pl, () => (Pl.on && Pl.entry === 'reply' && !(P.score.on && P.score.reply.on) ? 'No plumes will launch: “once per call” needs the Score and its Reply on (above).' : ''));
+  const cPlVoice = kit.select(pl, Pl, 'voice', { label: 'Voice', options: VOICES, def: DPl.voice, tip: 'On every hit: the voice whose hits launch a plume. Always: the voice colour of the plume when the look colours by voices.' });
+  plCtrls.push(cPlVoice);
   plCtrls.push(kit.slider(pl, Pl, 'area', { label: 'Launch area', min: 0, max: 90, step: 1, unit: 'u', def: DPl.area, tip: 'Radius around the centre a plume may start in (0 = anywhere). While the pointer touches the floor, plumes start under it.' }));
   plCtrls.push(kit.slider(pl, Pl, 'length', { label: 'Gesture length', min: 0.4, max: 5, step: 0.05, unit: 's', def: DPl.length }));
   plCtrls.push(kit.slider(pl, Pl, 'height', { label: 'Rise', min: 0, max: 30, step: 0.1, unit: 'u', def: DPl.height }));
@@ -286,7 +342,7 @@ export function buildPanel(container, app) {
   });
   const lp = kit.folder(fam.light, 'Light path', { onReset: () => app.resetGroup('light'), note: 'Where the received light is. Shared by both looks; only its strength listens to the music.' });
   const Lt = P.light, DLt = D.light, lpCtrls = [];
-  lpCtrls.push(kit.select(lp, Lt, 'path', { label: 'Path', def: DLt.path, options: [['orbits the centre', 'orbit'], ['stays put', 'still'], ['follows the pointer', 'pointer']], tip: 'Follows the pointer: move over the floor and watch the faces take the light (the geometry does not change).' }));
+  lpCtrls.push(kit.select(lp, Lt, 'path', { label: 'Path', def: DLt.path, options: [['orbits the centre', 'orbit'], ['stays put', 'still'], ['follows the pointer', 'pointer'], ['rides the call (Score)', 'call']], tip: 'Follows the pointer: move over the floor and watch the faces take the light (the geometry does not change).' }));
   lpCtrls.push(kit.slider(lp, Lt, 'radius', { label: 'Distance from centre', min: 0, max: 90, step: 0.5, unit: 'u', def: DLt.radius }));
   const cPeriod = kit.slider(lp, Lt, 'period', { label: 'Orbit time', min: 2, max: 120, log: true, unit: 's', def: DLt.period, tip: 'One trip around the centre. It follows the clock, not the music.' });
   lpCtrls.push(cPeriod);
@@ -384,7 +440,7 @@ export function buildPanel(container, app) {
     : `${DEST_NAME[P.inspect.dest].replace(' (experimental)', '')} (choose in Music response)`);
   kit.select(ins, P.inspect, 'voice', { label: 'Meter voice', options: VOICES, tip: 'Which voice the meters follow (Floor lift and Hits are per voice).' });
   kit.select(ins, P.solo, 'dest', { label: 'Solo response', def: 'none', tip: 'Shows only this destination’s visual contribution; the music keeps playing.',
-    options: [['none', 'none'], ['Floor lift', 'lift'], ['Rim breath', 'rim'], ['Hits', 'hits'], ['Colour drift', 'colour'], ['Shimmer (harmony)', 'shimmer'], ['Sparks', 'sparks']] });
+    options: [['none', 'none'], ['Floor lift', 'lift'], ['Rim breath', 'rim'], ['Hits', 'hits'], ['Colour drift', 'colour'], ['Shimmer (harmony)', 'shimmer'], ['Sparks', 'sparks'], ['Score (calls, replies, swell)', 'score']] });
   kit.select(ins, P.diag, 'view', { label: 'Render view', tip: 'Take the picture apart.', def: 'normal',
     options: [['composite', 'normal'], ['no glow', 'nobloom'], ['glow only', 'bloom'], ['emission only', 'emission'], ['surfaces only', 'surface'], ['received light only', 'light']] });
   const man = kit.folder(fam.inspect, 'Manual test', { note: 'Injected after the detector, to check a visual response without relying on the audio.' });
@@ -411,9 +467,13 @@ export function buildPanel(container, app) {
     for (const c of ptr) c.setInactive(!Pt.on ? 'Pointer is off' : solo !== 'none' ? 'Solo response hides the pointer' : '');
     cOrbit.setInactive(Pt.mode !== 'orbit' ? 'Driven by the pointer' : '');
     for (const c of plCtrls) c.setInactive(!Pl.on ? 'Plume is off' : soloOther('sparks'));
+    for (const c of scCtrls) c.setInactive(!Sc.on ? 'The score is off' : soloOther('score'));
+    for (const c of rpCtrls) c.setInactive(!Sc.on ? 'The score is off' : !Sc.reply.on ? 'Replies are off' : soloOther('score'));
+    cRate.setInactive(!Sc.on ? 'The score is off' : Sc.mode !== 'free' ? 'Loop clock: the pace is exact' : '');
     const noLight = app.mixed.lightAmount > 0 ? '' : 'The look on screen has its light amount at 0';
     for (const c of lpCtrls) c.setInactive(noLight);
     if (!noLight) cPeriod.setInactive(Lt.path !== 'orbit' ? 'The light is not orbiting' : '');
+    if (!noLight && Lt.path === 'call') for (const c of lpCtrls.slice(1)) c.setInactive(Sc.on ? 'The light rides the call: the score decides where and how strong' : 'The light rides the call, but the score is off: it stays dark');
     const noHarm = app.timeline.mode !== 'precise' ? 'Live · basic analysis has no harmonic path' : '';
     for (const c of hCtrls) c.setInactive(!Hm.on ? 'Shimmer is off' : noHarm || soloOther('shimmer'));
   };

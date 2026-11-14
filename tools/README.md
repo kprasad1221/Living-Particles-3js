@@ -19,6 +19,9 @@ python capture.py ui                     # Perform and Edit at 1440, 820 and 390
 python flow.py                           # the first-use path with real clicks and keys at 1440 and 390 px → captures/flow.json
 node palette.test.mjs                    # ramps and palette files, no browser (--write regenerates palettes/*.json from the looks)
 python looks_check.py                    # ramps, accent, received light, scene and palette round trips; and the light study sheets
+node score.test.mjs                      # the authored score and this world's routes, no browser → captures/score.json
+python score_check.py                    # the composed response in the page (9 checks), then sheets, a timing chart and a clip
+python score_check.py checks             # only the checks (about a minute); `sheets` renders only the pictures and the clip (about ten)
 python capture.py matched baseline       # matched stills for a named set of scenes (SETS in capture.py: baseline, looks)
 python compare.py grid DIR_A DIR_B out.jpg --labels before after --set baseline   # pair two folders into one sheet + differences
 python phrase_excerpt.py out.wav         # the composed 20 s excerpt on its own (synthetic music)

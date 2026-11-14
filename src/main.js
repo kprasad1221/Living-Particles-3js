@@ -5,6 +5,7 @@
 //  TIMELINE  musical time → feature frames → gate + level → per-destination envelopes
 //            → history rows (9 × 512); hit events → flashes and finite spark budgets
 //  FIELD     ~7.5k instanced hex prisms read the history at their own ripple delay
+//  SCORE     optional authored gestures above the measured music: a foundation, calls, replies
 //  LOOK      two editable looks, previewed alone or mixed by a fader, an LFO or a voice
 //  UI        one bar (source, transport, scene, look mix, three macros); the editor shows one
 //            family at a time; Music is a drawer; meters appear with the families that need them
@@ -26,6 +27,8 @@ import { Library, fmt } from './ui/library.js';
 import { buildPanel, FAMILIES } from './ui/panel.js';
 import { buildBar } from './ui/bar.js';
 import { SAVED_GROUPS, migrate, assignGroup, validate, header, compatibility } from './scene.js';
+import { Score, periodOf, commonPeriod, foundationCycles } from './shared/score.js';
+import { callHead, routeOf, pathPoint } from './world/gestures.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -80,10 +83,23 @@ const delayOf = i => { const tr = field.uniforms.uTravel.value; return tr > 0 ? 
 const sources = new Sources();
 const clock = new FixedClock();
 const meters = new Meters($('meters'));
+// The score runs on the timeline's steps, so it sees the same sequence of times at any frame rate.
+// A seek, a restart or a new source resets it with everything else: nothing pending survives.
+const score = new Score(P.score);
+const bassLevel = () => Math.max(response.lift[0], response.lift[1]);
 const timeline = new Timeline({
   onEvent: ev => sparks.burst(ev, field, stage.affector, delayOf),
-  onReset: () => { sparks.clear(); sparks.reseed(P.floor.seed); },
+  onReset: () => { sparks.clear(); sparks.reseed(P.floor.seed); score.reset(); field.setScore([], 0); },
 });
+// One reply → at most one plume, where its call arrived, at the reply's own start time.
+const onScoreStart = g => {
+  if (g.kind !== 'reply' || P.plume.entry !== 'reply') return;
+  sparks.plume({ id: g.id, voice: P.plume.voice, time: g.start, strength: g.strength }, field, stage.affector, delayOf, { any: true, at: pathPoint(routeOf(g, P.gesture), 0) });
+};
+timeline.onStep = (T, emit) => {
+  score.advance(T, response.lift[P.score.source] ?? 0.5, emit ? onScoreStart : null);
+  field.setScore(score.instances, score.foundation(T, bassLevel()));
+};
 
 const worker = new Worker(new URL('./analysis/worker.js', import.meta.url), { type: 'module' });
 const featureCache = new Map();          // key → { features, events } (bounded)
@@ -257,7 +273,10 @@ function applyScene(input, { fly = true } = {}) {
   if (!s) return false;
   app.sceneError = '';
   const floorBefore = JSON.stringify(P.floor);
-  for (const g of SAVED_GROUPS()) assignGroup(P[g], s[g]);
+  // A scene is the whole state, not a patch on whatever was loaded before: start every saved group from
+  // its default, then lay the scene over it. A key an older scene never had (a newer group, a newer
+  // option) therefore takes the default that reproduces the older behaviour, whatever was on screen.
+  for (const g of SAVED_GROUPS()) { assignGroup(P[g], clone(DEFAULTS[g])); assignGroup(P[g], s[g]); }
   if (s.looks) {
     for (const k of ['a', 'b', 'morph', 'drive', 'edit']) if (typeof s.looks[k] === typeof P.looks[k]) P.looks[k] = s.looks[k];
     Object.assign(app.lookA, sanitizeLook(s.looks.lookA, app.lookA));
@@ -274,6 +293,7 @@ function applyScene(input, { fly = true } = {}) {
   }
   stage.resize(innerWidth, innerHeight);
   app.redetect();
+  score.reset();                                       // new score settings start clean
   panel?.refresh(); bar?.refresh();
   return true;
 }
@@ -305,6 +325,20 @@ const BUILTIN = {
     Object.assign(d.plume, { on: true, voice: 1 });
     const lookA = { ...LOOKS.nocturne, restRim: 0.35, rimBreath: 0.9, fill: 0.5, bloom: 0.55, bloomThreshold: 0.7, bloomSky: 0, hitWhiten: 0.2, name: 'Nocturne · plume' };
     return { ...header(), ...d, view: standView(), looks: { ...d.looks, a: 'nocturne', b: 'av2p', morph: 0, lookA, lookB: LOOKS.av2p } };
+  } },
+  // v0.3 · P3: the composed response. A slow foundation, a warm call that crosses the floor, a pale reply
+  // that leaves from where it arrived, and one plume per reply. Fewer tiles answer the music, so the
+  // gestures have dark floor to cross; the light rides the call.
+  callreply: { label: 'Call and reply · Mineral Night', make() {
+    const d = clone(DEFAULTS);
+    Object.assign(d.floor, { active: 0.45, variation: 0.85, scatter: 0.1 });
+    Object.assign(d.movement, { lift: 1.3, swell: 0.5, travel: 30 });
+    Object.assign(d.map.rim, { source: 0, fall: 900 });
+    Object.assign(d.sparks, { perHit: 10, from: 'highs', continuous: 0, life: 0.9, size: 0.22 });
+    Object.assign(d.plume, { on: true, entry: 'reply', perHit: 110, height: 8, maxConcurrent: 3 });
+    d.score.on = true;
+    Object.assign(d.light, { path: 'call' });
+    return { ...header(), ...d, view: standView(), looks: { ...d.looks, a: 'mineral', b: 'nocturne', morph: 0, lookA: LOOKS.mineral, lookB: LOOKS.nocturne } };
   } },
   // v0.3 · P2: each new look in A with the look it answers in B, on the default scene's motion, so
   // A / Mix / B in the bar is the comparison.
@@ -490,6 +524,14 @@ app.restart = () => {
 };
 app.setLoop = on => { sources.setLoop(on); timeline.setLoop(on); };
 app.fireHit = () => timeline.fireManual(P.manual.voice);
+// Cue one plume by hand (the plume's usual place: under the pointer, else near the centre).
+let cueSerial = 0;
+app.cuePlume = () => sparks.plume({ id: `${timeline.epoch}:cue${cueSerial++}`, voice: P.plume.voice, time: timeline.latest, strength: 1 }, field, stage.affector, delayOf, { any: true });
+// Tap: put beat 1 here, so a call starts now and the rest follow from it.
+app.tapOrigin = () => { const per = periodOf(P.score); P.score.origin = +(((state.visualTime % per) + per) % per).toFixed(3); score.reset(); panel?.refresh(); autosave(); };
+app.score = score;
+app.scoreInfo = () => ({ call: periodOf(P.score), foundation: periodOf(P.score) * foundationCycles(P.score), repeats: commonPeriod(P.score),
+  nextCallIn: (1 - ((score.phaseAt(state.visualTime) % 1) + 1) % 1) * periodOf(P.score) });
 $('rememberChk').addEventListener('change', e => { library.remember = e.target.checked; });
 
 $('fileInput').addEventListener('change', async e => {
@@ -576,6 +618,7 @@ addEventListener('keydown', e => {
   else if (k === 'l') app.toggleLibrary();
   else if (k === 'e' || k === 'p') app.setMode(app.ui.mode === 'edit' ? 'perform' : 'edit');
   else if (k === 'r') app.restart();
+  else if (k === 'c') app.cuePlume();
   else if (k === '1') goTo('stand');
   else if (k === '2') goTo('survey');
   else if (k === '3') goTo('low');
@@ -644,7 +687,9 @@ function draw(dt, timing) {
   updateMorph(dt);
   mixLooks(app.lookA, app.lookB, app.effectiveMorph(), app.mixed);
   stage.update(dt, app.mixed, state.visualTime);
-  field.sync(app.mixed, state.visualTime, stage.affector, timing, response.lift[P.light.source] ?? 1);
+  field.setScore(score.instances, score.foundation(state.visualTime, bassLevel()));     // the foundation at display time: smooth between analysis steps
+  field.sync(app.mixed, state.visualTime, stage.affector, timing, response.lift[P.light.source] ?? 1,
+    P.light.path === 'call' ? callHead(field.gestures.instances, P.gesture, state.visualTime) : null);
   sparks.sync(app.mixed, state.visualTime, stage.pixelScale);
   renderer.info.reset();
   stage.render();
@@ -672,7 +717,7 @@ requestAnimationFrame(frame);
 
 // Hooks for the headless checks in tools/.
 window.__lp = {
-  state, P, app, response, timeline, field, sparks, stage, sources, library, worker, histAt, scene,
+  state, P, app, response, timeline, field, sparks, stage, sources, library, worker, histAt, scene, score,
   draw(dt = 1 / 60) { draw(dt, advance(0)); },
   advance, restart: () => app.restart(),
   goTo(name) { stage.goTo(name, true); },

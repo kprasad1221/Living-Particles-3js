@@ -123,6 +123,7 @@ export class Timeline {
     this._finish(lv, f.hop, this.harmonyAt(i * f.hop));
     this.bandDb.set(f.bandDb.subarray(i * nb, i * nb + nb));
     this.latest = T; this.stats.frames++;
+    this.onStep?.(T, emit);            // once per analysis step, after the response is up to date (the score listens here)
   }
 
   // ── live ──
@@ -148,6 +149,7 @@ export class Timeline {
     this._finish(lv, dt);
     this.bandDb.set(this.live.bandDb);
     this.latest = t; this.liveStep++; this.stats.frames++;
+    this.onStep?.(t, emit);
   }
 
   // ── shared ──

@@ -1,0 +1,138 @@
+{
+  "one_call_one_answer": {
+    "pass": true,
+    "calls": 15,
+    "replies": 16,
+    "firstCall": "c1",
+    "firstReplyParent": "c0"
+  },
+  "same_time_same_gestures": {
+    "pass": true,
+    "at": 17.3,
+    "alive": [
+      "c8|call|2|16.000000",
+      "r8|reply|2|16.500000"
+    ]
+  },
+  "reset_drops_what_was_pending": {
+    "pass": true,
+    "survivedReset": 0,
+    "filledInSilently": [
+      "c4",
+      "r4"
+    ]
+  },
+  "no_storm_after_a_long_gap": {
+    "pass": true,
+    "loop": {
+      "created": 2,
+      "announced": 2
+    },
+    "free": {
+      "created": 2,
+      "announced": 2
+    }
+  },
+  "free_clock_bends_without_jumping": {
+    "pass": true,
+    "tempoHz": 0.5,
+    "slowest": 0.3,
+    "fastest": 0.699,
+    "largestPhaseStep": 0.008116
+  },
+  "loop_repeats_exactly": {
+    "pass": true,
+    "call_s": 2,
+    "swell_s": 8,
+    "repeats_s": 24
+  },
+  "shape_overlap_and_rest": {
+    "pass": true,
+    "restShareAtOnePlace": 0.64,
+    "callAndReplyTogether": 0.61
+  },
+  "music_weighs_within_bounds": {
+    "pass": true,
+    "callStrengthQuiet": 0.5,
+    "callStrengthLoud": 1
+  },
+  "tempo_and_origin_set_the_grid": {
+    "pass": true,
+    "period_s": 1.25,
+    "firstCalls": [
+      0.37,
+      1.62,
+      2.87
+    ]
+  },
+  "settings_are_repaired": {
+    "pass": true,
+    "period_s": 0.25
+  },
+  "shared_modules_stand_alone": {
+    "pass": true,
+    "imports": {
+      "palette.js": [],
+      "score.js": []
+    }
+  },
+  "another_world_can_draw_it": {
+    "pass": true,
+    "ribbon": 0,
+    "frontAt": [
+      [
+        -8,
+        0
+      ],
+      [
+        0.8,
+        0
+      ]
+    ]
+  },
+  "hex_world_routes": {
+    "0": {
+      "start": [
+        -12.2,
+        0.4
+      ],
+      "end": [
+        12.2,
+        0.4
+      ],
+      "replyEnds": [
+        17.7,
+        -14.6
+      ]
+    },
+    "1": {
+      "start": [
+        12.2,
+        -8.4
+      ],
+      "end": [
+        -12.2,
+        -8.4
+      ],
+      "replyEnds": [
+        -17.7,
+        -23.5
+      ]
+    },
+    "2": {
+      "start": [
+        -6,
+        -4
+      ],
+      "end": [
+        6,
+        -4
+      ],
+      "replyEnds": [
+        6,
+        -20
+      ]
+    },
+    "pass": true
+  }
+}

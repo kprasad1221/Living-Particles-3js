@@ -1,0 +1,299 @@
+{
+  "one_reply_one_plume": {
+    "replyStarts": [
+      0.5,
+      2.5,
+      4.5,
+      6.5,
+      8.5,
+      10.5,
+      12.5,
+      14.5
+    ],
+    "plumeLaunches": [
+      0.5,
+      2.5,
+      4.5,
+      6.5,
+      8.5,
+      10.5,
+      12.5,
+      14.5
+    ],
+    "ids": [
+      "r0",
+      "r1",
+      "r2",
+      "r3",
+      "r4",
+      "r5",
+      "r6",
+      "r7"
+    ],
+    "dropped": 0,
+    "launchedWhereTheCallArrived": true,
+    "pass": true
+  },
+  "plume_entry_modes": {
+    "passage_s": [
+      0,
+      16.2
+    ],
+    "bassHitsDetected": [
+      3.9956,
+      4.4948,
+      4.9941,
+      5.4933,
+      5.9925,
+      6.4918,
+      6.991,
+      7.5018,
+      8.0011,
+      8.1404,
+      8.5003,
+      8.9995,
+      9.4987,
+      9.998,
+      10.4972,
+      10.9964,
+      11.4957,
+      11.9949,
+      12.4941,
+      12.9933,
+      13.1327,
+      13.4926,
+      14.0034
+    ],
+    "callStarts": [
+      0.0,
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0,
+      16.0
+    ],
+    "hits": {
+      "launches": [
+        3.9956,
+        4.4948,
+        4.9941,
+        6.4918,
+        6.991,
+        7.5018,
+        8.9995,
+        9.4987,
+        9.998,
+        11.4957,
+        11.9949,
+        12.4941,
+        14.0034
+      ],
+      "dropped": 10
+    },
+    "cue": {
+      "launches": [
+        5.0039,
+        11.0063
+      ],
+      "cuesGiven": 2,
+      "dropped": 0
+    },
+    "reply": {
+      "launches": [
+        0.5,
+        2.5,
+        4.5,
+        6.5,
+        8.5,
+        10.5,
+        12.5,
+        14.5
+      ],
+      "dropped": 0
+    },
+    "note": "hits: one plume per detected bass hit, minus those dropped by the limit on plumes alive at once; cue: only the two key presses; reply: one per call",
+    "pass": true
+  },
+  "same_at_any_display_rate": {
+    "at": 9.3,
+    "instances": [
+      [
+        "c4",
+        "call",
+        null,
+        1,
+        8,
+        0.914324
+      ],
+      [
+        "r4",
+        "reply",
+        "c4",
+        1,
+        8.5,
+        0.731459
+      ]
+    ],
+    "light": [
+      -12.216,
+      -8.44626,
+      0
+    ],
+    "plumesSinceSeek": 3,
+    "equal": {
+      "instances": true,
+      "uniforms": true,
+      "foundation": true,
+      "light": true,
+      "plumes": true
+    },
+    "pass": true
+  },
+  "suspended_tab": {
+    "jump_s": [
+      5.0,
+      14.0
+    ],
+    "plumesLaunchedByTheJump": 0,
+    "aliveAfter": [
+      "r6",
+      "c7",
+      "r7"
+    ],
+    "pass": true
+  },
+  "gesture_is_where_the_route_is": {
+    "t": 6.45,
+    "view": "no glow (the glow halo is a separate, wider effect)",
+    "changedPixelsPct": 16.57,
+    "changedPixelsPctWithGlow": 26.5,
+    "shareInsideTheRouteBox": 1.0,
+    "routeBox": [
+      0,
+      301,
+      858,
+      592
+    ],
+    "routeBoxPctOfFrame": 43.3,
+    "centroid": [
+      339,
+      451
+    ],
+    "largestChangeInTwoFarWindows": [
+      0.0,
+      0.0
+    ],
+    "pass": true
+  },
+  "rest_between_gestures": {
+    "callsEvery_s": 8,
+    "betweenCalls_at_12.5s": 0.0,
+    "duringACall_at_8.5s": 1.4596,
+    "pass": true
+  },
+  "light_rides_the_call": {
+    "samples": [
+      {
+        "t": 6.2,
+        "light": [
+          -6.5,
+          7.2583,
+          0.9621
+        ],
+        "head": [
+          -6.5,
+          7.2583,
+          0.8746
+        ],
+        "amount": 1.1,
+        "callAlive": 1
+      },
+      {
+        "t": 6.5,
+        "light": [
+          6.5,
+          7.2583,
+          0.9621
+        ],
+        "head": [
+          6.5,
+          7.2583,
+          0.8746
+        ],
+        "amount": 1.1,
+        "callAlive": 1
+      },
+      {
+        "t": 6.9,
+        "light": [
+          12.216,
+          0.4463,
+          0.862
+        ],
+        "head": [
+          12.216,
+          0.4463,
+          0.7837
+        ],
+        "amount": 1.1,
+        "callAlive": 1
+      },
+      {
+        "t": 7.6,
+        "light": [
+          12.216,
+          0.4463,
+          0
+        ],
+        "head": null,
+        "amount": 1.1,
+        "callAlive": 0
+      }
+    ],
+    "pass": true
+  },
+  "scene_round_trip": {
+    "schema": 9,
+    "cleared": true,
+    "ok": true,
+    "same": true,
+    "okOld": true,
+    "v02": {
+      "scoreOn": false,
+      "entry": "hits",
+      "lightPath": "orbit"
+    },
+    "newerRefused": true,
+    "newerMessage": "This scene was saved by a newer version (schema 99); this build reads up to 9. Nothing was changed.",
+    "pass": true
+  },
+  "seek_restart_and_source_change": {
+    "aliveBeforeSeek": [
+      "r3",
+      "c4",
+      "r4"
+    ],
+    "aliveAfterSeekTo3.1": [
+      "c1",
+      "r1"
+    ],
+    "plumesAnnouncedByTheSeek": 0,
+    "pendingAfterResetOnFreeClock": 0,
+    "aliveAfterRestart": [
+      "r-1",
+      "c0",
+      "r0"
+    ],
+    "epochAfterRestart": 16,
+    "epochRoseOnSourceChange": true,
+    "aliveAfterSourceChange": [
+      "c0",
+      "r0"
+    ],
+    "pass": true
+  },
+  "errors": []
+}

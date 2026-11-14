@@ -1,0 +1,34 @@
+{
+  "note": "The score is off unless a scene turns it on, and loading a scene starts from defaults: every scene and look from before P3 renders identically. Stills at rest / attack / crest / release, Stand camera, 1440 \u00d7 900, seed 1, software WebGL.",
+  "baselineScenes": {
+    "a": "P0 repaired baseline (7fc5da0)",
+    "b": "P3 (this commit)",
+    "pairs": 12,
+    "maxMeanAbsDiff8bit": 0.0,
+    "scenes": [
+      "av2p",
+      "nocturne",
+      "plume"
+    ]
+  },
+  "p2Looks": {
+    "a": "P2 (5d60780)",
+    "b": "P3 (this commit)",
+    "pairs": 48,
+    "maxMeanAbsDiff8bit": 0.0,
+    "stills": [
+      "av2p",
+      "daylight",
+      "daylight_lightonly",
+      "daylight_noglow",
+      "daylight_nolight",
+      "daylight_voices",
+      "mineral",
+      "mineral_lightonly",
+      "mineral_noglow",
+      "mineral_nolight",
+      "mineral_voices",
+      "nocturne"
+    ]
+  }
+}

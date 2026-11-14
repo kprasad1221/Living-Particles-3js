@@ -18,6 +18,8 @@
 //       the bar's "Activity" is the same value as before (macros.sparks), now also labelled for plumes.
 //    8  v0.3 · P2: looks carry colour ramps and a receiving light (older looks: ramps off, light off,
 //       default ramps drawn from their own voice colours); light group added (where the light is)
+//    9  v0.3 · P3: score and gesture groups added (score off for older saves); plume.entry added
+//       ('hits', the old behaviour); light.path gains 'call'
 //  Later checkpoints append steps here.
 //
 //  A scene saved by a newer build (schema above SCHEMA) is refused with a message instead of
@@ -25,8 +27,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { P, VERSION } from './params.js';
 import { isLegacy, fromLegacy } from './looks.js';
+import { sanitizeScore } from './shared/score.js';
 
-export const SCHEMA = 8;
+export const SCHEMA = 9;
 
 // Groups of P written into a scene. Everything else in P is transient.
 export const SAVED_GROUPS = () => Object.keys(P).filter(k => !TRANSIENT.includes(k) && k !== 'looks');
@@ -68,6 +71,8 @@ const STEPS = {
   6: s => { s.schema = 7; return s; },
   // 7 → 8: new look fields and a new group; sanitizeLook fills the look fields from the look's own colours.
   7: s => { s.schema = 8; return s; },
+  // 8 → 9: new groups and one new key, all with defaults that reproduce the older behaviour.
+  8: s => { s.schema = 9; return s; },
 };
 
 // Can this build read the scene? Returns { ok, message }.
@@ -122,7 +127,11 @@ const RULES = [
   P => { const H = P.harmony; H.tolerance = clamp(H.tolerance, 1, 100); H.activate = clamp(H.activate, 0.05, 1); H.letGo = clamp(Math.min(H.letGo, H.activate - 0.01), 0, 0.99);
          H.persist = clamp(H.persist, 0, 2000); H.bridge = clamp(H.bridge, 0, 2000); H.rise = clamp(H.rise, 0, 5000); H.release = clamp(H.release, 0, 10000); H.tuning = clamp(H.tuning, 400, 480); H.amount = clamp(H.amount, 0, 4); },
   P => { const L = P.light; L.radius = clamp(L.radius, 0, 90); L.period = clamp(L.period, 1, 600); L.angle = clamp(L.angle, -360, 360); L.audio = clamp(L.audio, 0, 1);
-         L.source = clamp(Math.round(L.source), 0, 8); if (!['orbit', 'still', 'pointer'].includes(L.path)) L.path = 'orbit'; },
+         L.source = clamp(Math.round(L.source), 0, 8); if (!['orbit', 'still', 'pointer', 'call'].includes(L.path)) L.path = 'orbit'; },
+  P => { sanitizeScore(P.score); if (!['hits', 'cue', 'reply'].includes(P.plume.entry)) P.plume.entry = 'hits'; },
+  P => { const G = P.gesture; G.reach = clamp(G.reach, 0.2, 4); for (const k of ['callWidth', 'replyWidth']) G[k] = clamp(G[k], 0.3, 20);
+         for (const k of ['callLift', 'replyLift', 'foundationLift']) G[k] = clamp(G[k], 0, 12); for (const k of ['callGlow', 'replyGlow']) G[k] = clamp(G[k], 0, 1);
+         G.replyLength = clamp(G.replyLength, 1, 80); G.foundationRadius = clamp(G.foundationRadius, 0, 90); G.foundationWidth = clamp(G.foundationWidth, 1, 90); },
 ];
 export function validate() { for (const r of RULES) r(P); }
 
