@@ -33,3 +33,7 @@ const swell = score.foundation(now, bassLevel);      // 0 … foundation.amount
 ```
 
 Nothing here is a package yet. That comes after a second world has used a module and shown what it needs.
+
+## Starting a palette from a reference
+
+`tools/sample_palette.py` reads named boxes on named frames of a clip and writes a palette file in the format above, with each stop's sample (frame time, box, reading, rgb) recorded under `source.samples`. `palettes/stellar-tide-court.take-a.json` is the first one made this way. The stops it writes are raw samples of a graded image; expect to edit them.

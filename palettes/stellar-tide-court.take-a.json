@@ -1,0 +1,476 @@
+{
+  "schema": 1,
+  "id": "stellar-tide-court.take-a",
+  "version": 1,
+  "name": "Stellar Tide Court \u00b7 Take A",
+  "source": {
+    "kind": "sampled",
+    "note": "Sampled by region and role from three frames of the original H3 export: 0.1 s (rest), 2.0 s (inlays lit), 4.0 s (branches and canopy lit). Displayed colours from a graded clip, not materials. Stops are the raw samples; nothing has been art-directed yet.",
+    "take": "Stellar Tide Court, Take A (MiniMax H3 export, 1376 \u00d7 768, 24 fps, 5.184 s)",
+    "clip": "https://app-uploads.krea.ai/public/1ac42382-6699-4b8f-9ac5-cceed518b0d1-video.mp4",
+    "frameSize": [
+      1376,
+      768
+    ],
+    "frameTimes": [
+      0.1,
+      2.0,
+      4.0
+    ],
+    "spec": "palettes/sources/stellar-tide-court.take-a.spec.json",
+    "samples": {
+      "water": {
+        "recess": {
+          "t": 0.1,
+          "box": [
+            112,
+            335,
+            190,
+            430
+          ],
+          "pick": "median",
+          "rgb": [
+            3,
+            13,
+            28
+          ],
+          "what": "inside the left arch: the darkest architecture"
+        },
+        "water": {
+          "t": 0.1,
+          "box": [
+            480,
+            558,
+            640,
+            600
+          ],
+          "pick": "median",
+          "rgb": [
+            4,
+            48,
+            64
+          ],
+          "what": "open water between the pool centre and the inlay stones"
+        },
+        "panel": {
+          "t": 2.0,
+          "box": [
+            340,
+            60,
+            440,
+            110
+          ],
+          "pick": "median",
+          "rgb": [
+            35,
+            113,
+            119
+          ],
+          "what": "a teal ceiling panel"
+        },
+        "panel-bright": {
+          "t": 2.0,
+          "box": [
+            300,
+            110,
+            420,
+            200
+          ],
+          "pick": "upper",
+          "rgb": [
+            27,
+            138,
+            145
+          ],
+          "what": "the brighter turquoise in the ceiling panels"
+        },
+        "glint": {
+          "t": 0.1,
+          "box": [
+            655,
+            525,
+            725,
+            550
+          ],
+          "pick": "bright",
+          "rgb": [
+            250,
+            250,
+            253
+          ],
+          "what": "the glint in the middle of the pool"
+        }
+      },
+      "inlay": {
+        "inlay-rest": {
+          "t": 0.1,
+          "box": [
+            455,
+            600,
+            600,
+            650
+          ],
+          "pick": "bright",
+          "rgb": [
+            162,
+            158,
+            127
+          ],
+          "what": "the gold inlay line before it lights"
+        },
+        "ember": {
+          "t": 2.0,
+          "box": [
+            430,
+            610,
+            610,
+            660
+          ],
+          "pick": "median",
+          "rgb": [
+            185,
+            148,
+            94
+          ],
+          "what": "stone in the glow around a lit inlay"
+        },
+        "amber": {
+          "t": 2.0,
+          "box": [
+            430,
+            610,
+            610,
+            660
+          ],
+          "pick": "vivid",
+          "rgb": [
+            177,
+            134,
+            79
+          ],
+          "what": "the coloured edge of a lit inlay line"
+        },
+        "gold": {
+          "t": 2.0,
+          "box": [
+            430,
+            610,
+            610,
+            660
+          ],
+          "pick": "bright",
+          "rgb": [
+            253,
+            233,
+            179
+          ],
+          "what": "the core of a lit inlay line"
+        },
+        "flare": {
+          "t": 2.0,
+          "box": [
+            430,
+            530,
+            470,
+            555
+          ],
+          "pick": "bright",
+          "rgb": [
+            250,
+            240,
+            226
+          ],
+          "what": "the flare where an inlay meets the water"
+        }
+      },
+      "filament": {
+        "thread-rest": {
+          "t": 0.1,
+          "box": [
+            290,
+            380,
+            340,
+            440
+          ],
+          "pick": "bright",
+          "rgb": [
+            89,
+            135,
+            157
+          ],
+          "what": "the pale threads before they light"
+        },
+        "thread-lit": {
+          "t": 4.0,
+          "box": [
+            170,
+            130,
+            260,
+            200
+          ],
+          "pick": "vivid",
+          "rgb": [
+            43,
+            169,
+            182
+          ],
+          "what": "the cyan edge of a lit branch"
+        },
+        "node": {
+          "t": 4.0,
+          "box": [
+            170,
+            130,
+            260,
+            200
+          ],
+          "pick": "bright",
+          "rgb": [
+            226,
+            246,
+            251
+          ],
+          "what": "the brightest part of a lit branch"
+        }
+      },
+      "canopy": {
+        "night": {
+          "t": 4.0,
+          "box": [
+            330,
+            110,
+            420,
+            150
+          ],
+          "pick": "dark",
+          "rgb": [
+            8,
+            28,
+            48
+          ],
+          "what": "night sky between the ceiling panels"
+        },
+        "tracery-rest": {
+          "t": 0.1,
+          "box": [
+            680,
+            195,
+            725,
+            220
+          ],
+          "pick": "median",
+          "rgb": [
+            165,
+            160,
+            128
+          ],
+          "what": "the gold tracery at the hub, at rest"
+        },
+        "tracery-lit": {
+          "t": 4.0,
+          "box": [
+            640,
+            170,
+            740,
+            230
+          ],
+          "pick": "bright",
+          "rgb": [
+            250,
+            228,
+            170
+          ],
+          "what": "the tracery around the hub, lit"
+        }
+      },
+      "stone": {
+        "stone-shadow": {
+          "t": 0.1,
+          "box": [
+            60,
+            620,
+            300,
+            680
+          ],
+          "pick": "dark",
+          "rgb": [
+            0,
+            2,
+            14
+          ],
+          "what": "mortar and shadow in the left-hand brickwork"
+        },
+        "stone": {
+          "t": 0.1,
+          "box": [
+            60,
+            620,
+            300,
+            680
+          ],
+          "pick": "median",
+          "rgb": [
+            9,
+            19,
+            29
+          ],
+          "what": "the same brickwork, its usual value"
+        },
+        "stone-lit": {
+          "t": 2.0,
+          "box": [
+            60,
+            620,
+            300,
+            680
+          ],
+          "pick": "upper",
+          "rgb": [
+            54,
+            53,
+            53
+          ],
+          "what": "the same brickwork under a lit inlay"
+        }
+      }
+    }
+  },
+  "inputColorSpace": "srgb",
+  "ramps": {
+    "water": {
+      "role": "emission",
+      "domain": "activation",
+      "curve": 1,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "recess",
+          "position": 0.0,
+          "color": "#030d1c"
+        },
+        {
+          "id": "water",
+          "position": 0.3,
+          "color": "#043040"
+        },
+        {
+          "id": "panel",
+          "position": 0.6,
+          "color": "#237177"
+        },
+        {
+          "id": "panel-bright",
+          "position": 0.82,
+          "color": "#1b8a91"
+        },
+        {
+          "id": "glint",
+          "position": 1.0,
+          "color": "#fafafd"
+        }
+      ]
+    },
+    "inlay": {
+      "role": "accent",
+      "domain": "event",
+      "curve": 1,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "inlay-rest",
+          "position": 0.0,
+          "color": "#a29e7f"
+        },
+        {
+          "id": "ember",
+          "position": 0.3,
+          "color": "#b9945e"
+        },
+        {
+          "id": "amber",
+          "position": 0.6,
+          "color": "#b1864f"
+        },
+        {
+          "id": "gold",
+          "position": 0.85,
+          "color": "#fde9b3"
+        },
+        {
+          "id": "flare",
+          "position": 1.0,
+          "color": "#faf0e2"
+        }
+      ]
+    },
+    "filament": {
+      "role": "emission",
+      "domain": "reply",
+      "curve": 1,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "thread-rest",
+          "position": 0.0,
+          "color": "#59879d"
+        },
+        {
+          "id": "thread-lit",
+          "position": 0.55,
+          "color": "#2ba9b6"
+        },
+        {
+          "id": "node",
+          "position": 1.0,
+          "color": "#e2f6fb"
+        }
+      ]
+    },
+    "canopy": {
+      "role": "atmosphere",
+      "domain": "sustain",
+      "curve": 1,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "night",
+          "position": 0.0,
+          "color": "#081c30"
+        },
+        {
+          "id": "tracery-rest",
+          "position": 0.5,
+          "color": "#a5a080"
+        },
+        {
+          "id": "tracery-lit",
+          "position": 1.0,
+          "color": "#fae4aa"
+        }
+      ]
+    },
+    "stone": {
+      "role": "surface",
+      "domain": "light",
+      "curve": 1,
+      "emissionScale": 1,
+      "stops": [
+        {
+          "id": "stone-shadow",
+          "position": 0.0,
+          "color": "#00020e"
+        },
+        {
+          "id": "stone",
+          "position": 0.6,
+          "color": "#09131d"
+        },
+        {
+          "id": "stone-lit",
+          "position": 1.0,
+          "color": "#363535"
+        }
+      ]
+    }
+  }
+}

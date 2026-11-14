@@ -2,7 +2,7 @@
 // The shared module src/shared/palette.js has no three.js or app state, so these run on it directly.
 // With `--write` the two built-in palettes are (re)written to palettes/*.json from the looks.
 import { register } from 'node:module';
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 register('./three-resolve.mjs', import.meta.url);
@@ -118,6 +118,35 @@ check('look_mix_mixes_ramps', () => {
   for (let i = 0; i < a.length; i += 97) expect(near(out.rampLinear[i], a[i] + (b[i] - a[i]) * 0.25, 1e-6), 'mix is not linear');
   expect(out.rampLinear.length === RAMP_ROWS.length * Pal.RAMP_SIZE * 3, 'unexpected ramp size');
   return { rows: RAMP_ROWS, size: Pal.RAMP_SIZE };
+});
+
+// 9 · Every other file in palettes/ (sampled from a reference by tools/sample_palette.py, or made by hand) loads as
+//     written: nothing repaired, nothing renamed, and a sampled file says where each stop came from. Two things are
+//     reported and not required, because they are art-direction findings and not defects: how many stops are still
+//     the raw sample, and whether each ramp gets steadily lighter along its length.
+check('other_palette_files_load_as_written', () => {
+  const out = {}, own = new Set(Object.values(FILES));
+  for (const f of readdirSync(join(ROOT, 'palettes')).filter(n => n.endsWith('.json') && !own.has(n)).sort()) {
+    const file = JSON.parse(readFileSync(join(ROOT, 'palettes', f), 'utf8')), got = Pal.sanitizePalette(JSON.parse(JSON.stringify(file)));
+    expect(got.ok, `${f}: ${got.message}`);
+    expect(got.palette.id === file.id && got.palette.schema === file.schema && JSON.stringify(got.palette.source) === JSON.stringify(file.source), `${f}: id, schema or source changed on the way through`);
+    const info = { ramps: {} }; let raw = 0, total = 0;
+    for (const [name, r] of Object.entries(file.ramps)) {
+      expect(JSON.stringify(got.palette.ramps[name]?.stops) === JSON.stringify(r.stops), `${f}: ramp "${name}" was repaired on load, so the file is not what a sketch would show`);
+      expect(got.palette.ramps[name].role === r.role && got.palette.ramps[name].domain === r.domain, `${f}: ramp "${name}" lost its role or domain`);
+      if (file.source?.kind === 'sampled') for (const s of r.stops) {
+        const smp = file.source.samples?.[name]?.[s.id];
+        expect(smp && Array.isArray(smp.box) && smp.box.length === 4 && Number.isFinite(smp.t) && Array.isArray(smp.rgb), `${f}: stop "${name}/${s.id}" has no record of where it was sampled`);
+        total++; if (s.color === '#' + smp.rgb.map(v => v.toString(16).padStart(2, '0')).join('')) raw++;
+      }
+      const b = Pal.bakeStops(r.stops, 64), lum = Array.from({ length: 64 }, (_, i) => Pal.luminance(b[i * 3], b[i * 3 + 1], b[i * 3 + 2]));
+      let rises = true; for (let i = 1; i < 64; i++) if (lum[i] < lum[i - 1] - 1e-6) rises = false;
+      info.ramps[name] = { stops: r.stops.map(s => s.color).join(' → '), startLuminance: +lum[0].toFixed(4), endLuminance: +lum[63].toFixed(4), getsSteadilyLighter: rises };
+    }
+    if (file.source?.kind === 'sampled') info.stopsStillTheRawSample = `${raw} of ${total}`;
+    out[f] = info;
+  }
+  return out;
 });
 
 mkdirSync(join(HERE, 'captures'), { recursive: true });

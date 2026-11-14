@@ -1,0 +1,288 @@
+{
+  "id": "stellar-tide-court.take-a",
+  "name": "Stellar Tide Court \u00b7 Take A",
+  "version": 1,
+  "out": "palettes/stellar-tide-court.take-a.json",
+  "take": "Stellar Tide Court, Take A (MiniMax H3 export, 1376 \u00d7 768, 24 fps, 5.184 s)",
+  "clip": "https://app-uploads.krea.ai/public/1ac42382-6699-4b8f-9ac5-cceed518b0d1-video.mp4",
+  "note": "Sampled by region and role from three frames of the original H3 export: 0.1 s (rest), 2.0 s (inlays lit), 4.0 s (branches and canopy lit). Displayed colours from a graded clip, not materials. Stops are the raw samples; nothing has been art-directed yet.",
+  "ramps": {
+    "water": {
+      "role": "emission",
+      "domain": "activation",
+      "stops": [
+        {
+          "id": "recess",
+          "position": 0.0,
+          "t": 0.1,
+          "box": [
+            112,
+            335,
+            190,
+            430
+          ],
+          "pick": "median",
+          "what": "inside the left arch: the darkest architecture"
+        },
+        {
+          "id": "water",
+          "position": 0.3,
+          "t": 0.1,
+          "box": [
+            480,
+            558,
+            640,
+            600
+          ],
+          "pick": "median",
+          "what": "open water between the pool centre and the inlay stones"
+        },
+        {
+          "id": "panel",
+          "position": 0.6,
+          "t": 2.0,
+          "box": [
+            340,
+            60,
+            440,
+            110
+          ],
+          "pick": "median",
+          "what": "a teal ceiling panel"
+        },
+        {
+          "id": "panel-bright",
+          "position": 0.82,
+          "t": 2.0,
+          "box": [
+            300,
+            110,
+            420,
+            200
+          ],
+          "pick": "upper",
+          "what": "the brighter turquoise in the ceiling panels"
+        },
+        {
+          "id": "glint",
+          "position": 1.0,
+          "t": 0.1,
+          "box": [
+            655,
+            525,
+            725,
+            550
+          ],
+          "pick": "bright",
+          "what": "the glint in the middle of the pool"
+        }
+      ]
+    },
+    "inlay": {
+      "role": "accent",
+      "domain": "event",
+      "stops": [
+        {
+          "id": "inlay-rest",
+          "position": 0.0,
+          "t": 0.1,
+          "box": [
+            455,
+            600,
+            600,
+            650
+          ],
+          "pick": "bright",
+          "what": "the gold inlay line before it lights"
+        },
+        {
+          "id": "ember",
+          "position": 0.3,
+          "t": 2.0,
+          "box": [
+            430,
+            610,
+            610,
+            660
+          ],
+          "pick": "median",
+          "what": "stone in the glow around a lit inlay"
+        },
+        {
+          "id": "amber",
+          "position": 0.6,
+          "t": 2.0,
+          "box": [
+            430,
+            610,
+            610,
+            660
+          ],
+          "pick": "vivid",
+          "what": "the coloured edge of a lit inlay line"
+        },
+        {
+          "id": "gold",
+          "position": 0.85,
+          "t": 2.0,
+          "box": [
+            430,
+            610,
+            610,
+            660
+          ],
+          "pick": "bright",
+          "what": "the core of a lit inlay line"
+        },
+        {
+          "id": "flare",
+          "position": 1.0,
+          "t": 2.0,
+          "box": [
+            430,
+            530,
+            470,
+            555
+          ],
+          "pick": "bright",
+          "what": "the flare where an inlay meets the water"
+        }
+      ]
+    },
+    "filament": {
+      "role": "emission",
+      "domain": "reply",
+      "stops": [
+        {
+          "id": "thread-rest",
+          "position": 0.0,
+          "t": 0.1,
+          "box": [
+            290,
+            380,
+            340,
+            440
+          ],
+          "pick": "bright",
+          "what": "the pale threads before they light"
+        },
+        {
+          "id": "thread-lit",
+          "position": 0.55,
+          "t": 4.0,
+          "box": [
+            170,
+            130,
+            260,
+            200
+          ],
+          "pick": "vivid",
+          "what": "the cyan edge of a lit branch"
+        },
+        {
+          "id": "node",
+          "position": 1.0,
+          "t": 4.0,
+          "box": [
+            170,
+            130,
+            260,
+            200
+          ],
+          "pick": "bright",
+          "what": "the brightest part of a lit branch"
+        }
+      ]
+    },
+    "canopy": {
+      "role": "atmosphere",
+      "domain": "sustain",
+      "stops": [
+        {
+          "id": "night",
+          "position": 0.0,
+          "t": 4.0,
+          "box": [
+            330,
+            110,
+            420,
+            150
+          ],
+          "pick": "dark",
+          "what": "night sky between the ceiling panels"
+        },
+        {
+          "id": "tracery-rest",
+          "position": 0.5,
+          "t": 0.1,
+          "box": [
+            680,
+            195,
+            725,
+            220
+          ],
+          "pick": "median",
+          "what": "the gold tracery at the hub, at rest"
+        },
+        {
+          "id": "tracery-lit",
+          "position": 1.0,
+          "t": 4.0,
+          "box": [
+            640,
+            170,
+            740,
+            230
+          ],
+          "pick": "bright",
+          "what": "the tracery around the hub, lit"
+        }
+      ]
+    },
+    "stone": {
+      "role": "surface",
+      "domain": "light",
+      "stops": [
+        {
+          "id": "stone-shadow",
+          "position": 0.0,
+          "t": 0.1,
+          "box": [
+            60,
+            620,
+            300,
+            680
+          ],
+          "pick": "dark",
+          "what": "mortar and shadow in the left-hand brickwork"
+        },
+        {
+          "id": "stone",
+          "position": 0.6,
+          "t": 0.1,
+          "box": [
+            60,
+            620,
+            300,
+            680
+          ],
+          "pick": "median",
+          "what": "the same brickwork, its usual value"
+        },
+        {
+          "id": "stone-lit",
+          "position": 1.0,
+          "t": 2.0,
+          "box": [
+            60,
+            620,
+            300,
+            680
+          ],
+          "pick": "upper",
+          "what": "the same brickwork under a lit inlay"
+        }
+      ]
+    }
+  }
+}
